@@ -30,67 +30,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
-    let mounted = true;
-
-    const initializeAuth = async () => {
-      try {
-        // Check for local test user first
-        const localTestUser = localStorage.getItem('localTestUser');
-        if (localTestUser && mounted) {
-          try {
-            const user = JSON.parse(localTestUser);
-            setAuthState({
-              isAuthenticated: true,
-              user: {
-                ...user,
-                createdAt: new Date(user.createdAt)
-              },
-              loading: false
-            });
-            return;
-          } catch (error) {
-            console.error('Error parsing local test user:', error);
-            localStorage.removeItem('localTestUser');
-          }
-        }
-
-        // Check Supabase session
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Session error:', error);
-        }
-
-        if (session?.user && mounted) {
-          await loadUserProfile(session.user.id);
-        } else if (mounted) {
+    // Check for local test user first
+    const checkLocalUser = () => {
+      const localUser = localStorage.getItem('localTestUser');
+      if (localUser) {
+        try {
+          const user = JSON.parse(localUser);
           setAuthState({
-            isAuthenticated: false,
-            user: null,
+            isAuthenticated: true,
+            user: {
+              ...user,
+              createdAt: new Date(user.createdAt)
+            },
             loading: false
           });
+          return true;
+        } catch (error) {
+          console.error('Error parsing local user:', error);
+          localStorage.removeItem('localTestUser');
+        }
+      }
+      return false;
+    };
+
+    // Check for existing session
+    const checkSession = async () => {
+      // First check for local test user
+      if (checkLocalUser()) {
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await loadUserProfile(session.user.id);
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
-        if (mounted) {
-          setAuthState({
-            isAuthenticated: false,
-            user: null,
-            loading: false
-          });
-        }
+        console.error('Session check error:', error);
+      } finally {
+        setAuthState(prev => ({ ...prev, loading: false }));
       }
     };
 
-    initializeAuth();
+    checkSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
       if (event === 'SIGNED_IN' && session?.user) {
         await loadUserProfile(session.user.id);
       } else if (event === 'SIGNED_OUT') {
+        // Clear local test user on sign out
         localStorage.removeItem('localTestUser');
         setAuthState({
           isAuthenticated: false,
@@ -100,10 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const loadUserProfile = async (userId: string) => {
@@ -118,11 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
 
-      if (error) {
-        console.error('Profile load error:', error);
-        setAuthState(prev => ({ ...prev, loading: false }));
-        return;
-      }
+      if (error) throw error;
 
       const user: User = {
         id: profile.id,
@@ -206,7 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (error) {
       console.error('Login error:', error);
-      throw error;
+      throw error; // Re-throw to let the UI handle the error message
     }
   };
 
@@ -243,6 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (profileError) {
           console.error('Profile creation error:', profileError);
+          // Provide more specific error messages based on the error code
           if (profileError.code === '23505') {
             if (profileError.message.includes('username')) {
               throw new Error('Username already exists. Please choose a different username.');
@@ -270,12 +253,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (error) {
       console.error('Registration error:', error);
+      // Re-throw the error to let the UI handle it
       throw error;
     }
   };
 
   const logout = async () => {
+    // Clear local test user
     localStorage.removeItem('localTestUser');
+    
+    // Sign out from Supabase
     await supabase.auth.signOut();
   };
 
@@ -335,6 +322,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const verifyOTP = async (code: string): Promise<boolean> => {
+    // Mock OTP verification
     return code === '123456';
   };
 

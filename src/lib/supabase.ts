@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import CryptoJS from 'crypto-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   db: {
@@ -22,36 +22,20 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 });
 
 // Encryption utilities
-const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'default-secret-key';
+const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'your-secret-key';
 
 export const encryptData = (data: string): string => {
-  try {
-    return CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString();
-  } catch (error) {
-    console.error('Encryption error:', error);
-    return data; // Return original data if encryption fails
-  }
+  return CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString();
 };
 
 export const decryptData = (encryptedData: string): string => {
-  try {
-    const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
-    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-    return decrypted || encryptedData; // Return original if decryption fails
-  } catch (error) {
-    console.error('Decryption error:', error);
-    return encryptedData; // Return original data if decryption fails
-  }
+  const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
+  return bytes.toString(CryptoJS.enc.Utf8);
 };
 
 // Hash utilities
 export const hashData = (data: string): string => {
-  try {
-    return CryptoJS.SHA256(data).toString();
-  } catch (error) {
-    console.error('Hashing error:', error);
-    return data;
-  }
+  return CryptoJS.SHA256(data).toString();
 };
 
 // Image upload utility
