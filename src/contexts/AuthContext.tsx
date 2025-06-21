@@ -30,52 +30,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
-    // Check for local test user first
-    const checkLocalUser = () => {
-      const localUser = localStorage.getItem('localTestUser');
-      if (localUser) {
-        try {
-          const user = JSON.parse(localUser);
-          setAuthState({
-            isAuthenticated: true,
-            user: {
-              ...user,
-              createdAt: new Date(user.createdAt)
-            },
-            loading: false
-          });
-          return true;
-        } catch (error) {
-          console.error('Error parsing local user:', error);
-          localStorage.removeItem('localTestUser');
-        }
-      }
-      return false;
-    };
+    let mounted = true;
 
-    // Check for existing session
-    const checkSession = async () => {
-      // First check for local test user
-      if (checkLocalUser()) {
-        return;
-      }
-
+    const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+        // First check for local test user
+        const localUser = localStorage.getItem('localTestUser');
+        if (localUser && mounted) {
+          try {
+            const user = JSON.parse(localUser);
+            setAuthState({
+              isAuthenticated: true,
+              user: {
+                ...user,
+                createdAt: new Date(user.createdAt)
+              },
+              loading: false
+            });
+            return;
+          } catch (error) {
+            console.error('Error parsing local user:', error);
+            localStorage.removeItem('localTestUser');
+          }
+        }
+
+        // Check for existing Supabase session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session check error:', error);
+        }
+
+        if (session?.user && mounted) {
           await loadUserProfile(session.user.id);
+        } else if (mounted) {
+          setAuthState(prev => ({ ...prev, loading: false }));
         }
       } catch (error) {
-        console.error('Session check error:', error);
-      } finally {
-        setAuthState(prev => ({ ...prev, loading: false }));
+        console.error('Auth initialization error:', error);
+        if (mounted) {
+          setAuthState(prev => ({ ...prev, loading: false }));
+        }
       }
     };
 
-    checkSession();
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
       if (event === 'SIGNED_IN' && session?.user) {
         await loadUserProfile(session.user.id);
       } else if (event === 'SIGNED_OUT') {
@@ -89,7 +93,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadUserProfile = async (userId: string) => {
@@ -104,7 +111,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Profile load error:', error);
+        setAuthState(prev => ({ ...prev, loading: false }));
+        return;
+      }
 
       const user: User = {
         id: profile.id,
