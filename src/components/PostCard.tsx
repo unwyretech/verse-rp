@@ -10,13 +10,19 @@ interface PostCardProps {
 }
 
 const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost }) => {
+  // Use character data if available, otherwise fall back to user data
+  const displayAvatar = post.character?.avatar || post.user?.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150';
+  const displayName = post.character?.name || post.user?.display_name || post.user?.username || 'Unknown User';
+  const displayTitle = post.character?.title || '';
+  const displayUniverse = post.character?.universe;
+
   return (
     <article className="p-6 hover:bg-gray-800/20 transition-colors border-b border-gray-700/30">
       <div className="flex space-x-4">
         <div className="flex-shrink-0">
           <img
-            src={post.character.avatar}
-            alt={post.character.name}
+            src={displayAvatar}
+            alt={displayName}
             className="w-12 h-12 rounded-full object-cover ring-2 ring-purple-500/30"
           />
         </div>
@@ -24,8 +30,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost }) => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-2 mb-2">
             <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-white">{post.character.name}</h3>
-              <span className="text-purple-400 text-sm font-medium">{post.character.title}</span>
+              <h3 className="font-bold text-white">{displayName}</h3>
+              {displayTitle && (
+                <span className="text-purple-400 text-sm font-medium">{displayTitle}</span>
+              )}
             </div>
             <span className="text-gray-500">·</span>
             <time className="text-gray-500 text-sm">
@@ -36,12 +44,14 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost }) => {
             </button>
           </div>
 
-          <div className="mb-3">
-            <div className="inline-flex items-center space-x-2 text-xs text-purple-300 bg-purple-900/30 px-2 py-1 rounded-full mb-2">
-              <span>📖</span>
-              <span>{post.character.universe}</span>
+          {displayUniverse && (
+            <div className="mb-3">
+              <div className="inline-flex items-center space-x-2 text-xs text-purple-300 bg-purple-900/30 px-2 py-1 rounded-full mb-2">
+                <span>📖</span>
+                <span>{displayUniverse}</span>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="mb-4">
             <p className="text-gray-100 leading-relaxed whitespace-pre-wrap">{post.content}</p>
