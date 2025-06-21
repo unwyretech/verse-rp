@@ -10,9 +10,16 @@ interface PostCardProps {
 }
 
 const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost }) => {
-  // Use character data if available, otherwise fall back to user data
-  const displayAvatar = post.character?.avatar || post.user?.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150';
-  const displayName = post.character?.name || post.user?.display_name || post.user?.username || 'Unknown User';
+  // Safely handle undefined user/character data
+  const displayAvatar = post.character?.avatar || 
+                       post.user?.avatar || 
+                       'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150';
+  
+  const displayName = post.character?.name || 
+                     post.user?.displayName || 
+                     post.user?.username || 
+                     'Unknown User';
+  
   const displayTitle = post.character?.title || '';
   const displayUniverse = post.character?.universe;
 
@@ -62,7 +69,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost }) => {
               <div className="p-2 rounded-full group-hover:bg-blue-400/10 transition-colors">
                 <MessageCircle className="w-5 h-5" />
               </div>
-              <span className="text-sm">{post.comments}</span>
+              <span className="text-sm">{post.comments || 0}</span>
             </button>
 
             <button
@@ -74,7 +81,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost }) => {
               <div className="p-2 rounded-full group-hover:bg-green-400/10 transition-colors">
                 <Repeat2 className="w-5 h-5" />
               </div>
-              <span className="text-sm">{post.reposts}</span>
+              <span className="text-sm">{post.reposts || 0}</span>
             </button>
 
             <button
@@ -86,7 +93,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost }) => {
               <div className="p-2 rounded-full group-hover:bg-red-400/10 transition-colors">
                 <Heart className={`w-5 h-5 ${post.isLiked ? 'fill-current' : ''}`} />
               </div>
-              <span className="text-sm">{post.likes}</span>
+              <span className="text-sm">{post.likes || 0}</span>
             </button>
 
             <button className="flex items-center space-x-2 text-gray-500 hover:text-blue-400 transition-colors group">

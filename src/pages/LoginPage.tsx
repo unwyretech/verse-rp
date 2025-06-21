@@ -73,6 +73,8 @@ const LoginPage: React.FC = () => {
   };
 
   const handleLocalTestLogin = () => {
+    setLoading(true);
+    
     // Create a local test user and bypass authentication
     const testUser = {
       id: 'local-test-user',
@@ -87,7 +89,7 @@ const LoginPage: React.FC = () => {
       characters: [],
       followers: [],
       following: [],
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
       privacySettings: {
         profileVisibility: 'public' as const,
         messagePermissions: 'everyone' as const,
@@ -100,7 +102,9 @@ const LoginPage: React.FC = () => {
     localStorage.setItem('localTestUser', JSON.stringify(testUser));
     
     // Trigger a page reload to let the auth context pick up the local user
-    window.location.reload();
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   };
 
   if (loading) {
@@ -258,9 +262,10 @@ const LoginPage: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {showOTP ? 'Verify Code' : isLogin ? 'Sign In' : 'Create Account'}
+              {loading ? 'Loading...' : showOTP ? 'Verify Code' : isLogin ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
@@ -290,7 +295,8 @@ const LoginPage: React.FC = () => {
               <div className="border-t border-gray-700/50 pt-4">
                 <button
                   onClick={handleLocalTestLogin}
-                  className="w-full flex items-center justify-center space-x-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-medium py-3 rounded-lg transition-all duration-200 border border-gray-600"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center space-x-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-medium py-3 rounded-lg transition-all duration-200 border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <User className="w-5 h-5" />
                   <span>Continue with Local Test Profile</span>

@@ -34,14 +34,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initializeAuth = async () => {
       try {
-        // Clear any existing local test user to force fresh login
-        localStorage.removeItem('localTestUser');
-        
-        // Clear any existing Supabase session
-        await supabase.auth.signOut();
+        // Check for local test user first
+        const localTestUser = localStorage.getItem('localTestUser');
+        if (localTestUser && mounted) {
+          try {
+            const user = JSON.parse(localTestUser);
+            setAuthState({
+              isAuthenticated: true,
+              user: {
+                ...user,
+                createdAt: new Date(user.createdAt)
+              },
+              loading: false
+            });
+            return;
+          } catch (error) {
+            console.error('Error parsing local test user:', error);
+            localStorage.removeItem('localTestUser');
+          }
+        }
 
-        // Set loading to false to show login screen
-        if (mounted) {
+        // Check Supabase session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session error:', error);
+        }
+
+        if (session?.user && mounted) {
+          await loadUserProfile(session.user.id);
+        } else if (mounted) {
           setAuthState({
             isAuthenticated: false,
             user: null,
