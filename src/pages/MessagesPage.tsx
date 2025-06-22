@@ -13,6 +13,10 @@ const MessagesPage: React.FC = () => {
   const [showNewChat, setShowNewChat] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Valid UUID for demonstration purposes
+  const dummyUserId1 = 'a1b2c3d4-e5f6-7890-1234-567890abcdef';
+  const dummyUserId2 = 'b2c3d4e5-f6g7-8901-2345-678901bcdefg';
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (messageText.trim() && selectedChat && user) {
@@ -118,7 +122,7 @@ const MessagesPage: React.FC = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-medium truncate">
-                        {chat.name || `Chat ${chat.id.slice(0, 8)}`}
+                        {chat.name || (chat.id ? `Chat ${chat.id.slice(0, 8)}` : 'Unnamed Chat')}
                       </p>
                       <p className="text-gray-400 text-sm truncate">
                         {chat.lastMessage?.content || 'No messages yet'}
@@ -151,7 +155,7 @@ const MessagesPage: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-white font-semibold">
-                      {selectedChat.name || `Chat ${selectedChat.id.slice(0, 8)}`}
+                      {selectedChat.name || (selectedChat.id ? `Chat ${selectedChat.id.slice(0, 8)}` : 'Unnamed Chat')}
                     </h3>
                     <div className="flex items-center space-x-2">
                       {selectedChat.isEncrypted && (
@@ -240,13 +244,13 @@ const MessagesPage: React.FC = () => {
                 />
                 <div className="flex space-x-3">
                   <button
-                    onClick={() => handleCreateChat(['mock-user-2'], false)}
+                    onClick={() => handleCreateChat([dummyUserId1], false)}
                     className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-lg transition-colors"
                   >
                     Direct Message
                   </button>
                   <button
-                    onClick={() => handleCreateChat(['mock-user-2', 'mock-user-3'], true, 'New Group')}
+                    onClick={() => handleCreateChat([dummyUserId1, dummyUserId2], true, 'New Group')}
                     className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-lg transition-colors"
                   >
                     Group Chat
