@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, UserMinus, Calendar, MapPin } from 'lucide-react';
-import { Character, Post } from '../types';
+import { Character, Post, User } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 import PostCard from './PostCard';
@@ -12,14 +12,34 @@ interface CharacterProfileProps {
 
 const CharacterProfile: React.FC<CharacterProfileProps> = ({ character, onClose }) => {
   const { user } = useAuth();
-  const { posts, followCharacter, unfollowCharacter, likePost, repostPost } = useApp();
+  const { posts, followCharacter, unfollowCharacter, likePost, repostPost, getCharacterFollowers, getCharacterFollowing } = useApp();
   const [activeTab, setActiveTab] = useState<'posts' | 'followers' | 'following'>('posts');
+  const [followers, setFollowers] = useState<User[]>([]);
+  const [following, setFollowing] = useState<(User | Character)[]>([]);
 
   const isOwnCharacter = character.userId === user?.id;
   const isFollowing = character.followers.includes(user?.id || '');
 
   // Get posts by this character
   const characterPosts = posts.filter(post => post.characterId === character.id);
+
+  useEffect(() => {
+    if (activeTab === 'followers') {
+      loadFollowers();
+    } else if (activeTab === 'following') {
+      loadFollowing();
+    }
+  }, [activeTab, character.id]);
+
+  const loadFollowers = async () => {
+    const followersList = await getCharacterFollowers(character.id);
+    setFollowers(followersList);
+  };
+
+  const loadFollowing = async () => {
+    const followingList = await getCharacterFollowing(character.id);
+    setFollowing(followingList);
+  };
 
   const handleFollow = () => {
     if (isFollowing) {
@@ -38,8 +58,8 @@ const CharacterProfile: React.FC<CharacterProfileProps> = ({ character, onClose 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-2xl border border-gray-700/50 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-2xl border border-gray-700/50 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gray-900 border-b border-gray-700/50 p-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-white">Character Profile</h2>
           <button
@@ -203,14 +223,56 @@ const CharacterProfile: React.FC<CharacterProfileProps> = ({ character, onClose 
           )}
 
           {activeTab === 'followers' && (
-            <div className="text-center py-12">
-              <p className="text-gray-400">Followers list coming soon</p>
+            <div className="space-y-4">
+              {followers.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-400">No followers yet</p>
+                </div>
+              ) : (
+                followers.map(follower => (
+                  <div key={follower.id} className="flex items-center space-x-4 p-4 bg-gray-800/30 rounded-lg hover:bg-gray-700/30 transition-colors cursor-pointer">
+                    <img
+                      src={follower.avatar}
+                      alt={follower.displayName}
+                      className="w-12 h-12 rounded-full object-cover"
+                    />
+                    <div className="flex-1">
+                      <h3 className="text-white font-medium">{follower.displayName}</h3>
+                      <p className="text-gray-400 text-sm">@{follower.username}</p>
+                      <p className="text-purple-300 text-sm">#{follower.writersTag}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
           {activeTab === 'following' && (
-            <div className="text-center py-12">
-              <p className="text-gray-400">Following list coming soon</p>
+            <div className="space-y-4">
+              {following.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-400">Not following anyone yet</p>
+                </div>
+              ) : (
+                following.map(item => (
+                  <div key={item.id} className="flex items-center space-x-4 p-4 bg-gray-800/30 rounded-lg hover:bg-gray-700/30 transition-colors cursor-pointer">
+                    <img
+                      src={item.avatar}
+                      alt={'displayName' in item ? item.displayName : item.name}
+                      className="w-12 h-12 rounded-full object-cover"
+                    />
+                    <div className="flex-1">
+                      <h3 className="text-white font-medium">
+                        {'displayName' in item ? item.displayName : item.name}
+                      </h3>
+                      <p className="text-gray-400 text-sm">@{item.username}</p>
+                      <p className="text-purple-300 text-sm">
+                        #{'writersTag' in item ? item.writersTag : item.verseTag}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>

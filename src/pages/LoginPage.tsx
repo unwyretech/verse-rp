@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Feather, Eye, EyeOff, Shield } from 'lucide-react';
+import { Feather, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -7,18 +7,16 @@ const LoginPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showOTP, setShowOTP] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     identifier: '', // Can be username or email
     password: '',
     displayName: '',
     writersTag: '',
-    email: '',
-    otp: ''
+    email: ''
   });
 
-  const { login, register, verifyOTP, enableTwoFactor } = useAuth();
+  const { login, register } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,14 +24,7 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      if (showOTP) {
-        const success = await verifyOTP(formData.otp);
-        if (success) {
-          setShowOTP(false);
-        } else {
-          setError('Invalid verification code');
-        }
-      } else if (isLogin) {
+      if (isLogin) {
         await login(formData.identifier, formData.password);
       } else {
         // Extract username from identifier for registration
@@ -57,21 +48,6 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleEnable2FA = async () => {
-    if (formData.email) {
-      setLoading(true);
-      try {
-        await enableTwoFactor(formData.email);
-        setShowOTP(true);
-      } catch (error) {
-        console.error('2FA setup error:', error);
-        setError('Failed to setup 2FA');
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -84,9 +60,9 @@ const LoginPage: React.FC = () => {
             <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Feather className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-2">CharacterVerse</h1>
+            <h1 className="text-2xl font-bold text-white mb-2">VERSE</h1>
             <p className="text-gray-400">
-              {showOTP ? 'Enter verification code' : isLogin ? 'Welcome back' : 'Join the community'}
+              {isLogin ? 'Welcome back to the community' : 'Join the storytelling community'}
             </p>
           </div>
 
@@ -97,150 +73,115 @@ const LoginPage: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {showOTP ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Verification Code
-                </label>
-                <input
-                  type="text"
-                  value={formData.otp}
-                  onChange={(e) => setFormData(prev => ({ ...prev, otp: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
-                  placeholder="Enter 6-digit code"
-                  maxLength={6}
-                />
-              </div>
-            ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {isLogin ? 'Username or Email' : 'Username'}
+              </label>
+              <input
+                type="text"
+                value={formData.identifier}
+                onChange={(e) => setFormData(prev => ({ ...prev, identifier: e.target.value }))}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                placeholder={isLogin ? "Enter username or email" : "Choose a username"}
+                required
+              />
+            </div>
+
+            {!isLogin && (
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    {isLogin ? 'Username or Email' : 'Username'}
+                    Display Name
                   </label>
                   <input
                     type="text"
-                    value={formData.identifier}
-                    onChange={(e) => setFormData(prev => ({ ...prev, identifier: e.target.value }))}
+                    value={formData.displayName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
                     className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
-                    placeholder={isLogin ? "Enter username or email" : "Choose a username"}
+                    placeholder="Your display name"
                     required
                   />
                 </div>
 
-                {!isLogin && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Display Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.displayName}
-                      onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
-                      placeholder="Your display name"
-                      required
-                    />
-                  </div>
-                )}
-
-                {!isLogin && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Writer's Tag
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.writersTag}
-                      onChange={(e) => setFormData(prev => ({ ...prev, writersTag: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
-                      placeholder="e.g., fantasy, scifi, modern"
-                      required
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Writer's Tag
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.writersTag}
+                    onChange={(e) => setFormData(prev => ({ ...prev, writersTag: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                    placeholder="e.g., fantasy, scifi, modern"
+                    required
+                  />
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Password
+                    Email
                   </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={formData.password}
-                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 pr-12 text-white focus:border-purple-500 focus:outline-none"
-                      placeholder="Enter your password"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                    placeholder="your@email.com"
+                    required
+                  />
                 </div>
-
-                {!isLogin && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Email
-                    </label>
-                    <div className="flex space-x-2">
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                        className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
-                        placeholder="your@email.com"
-                        required
-                      />
-                      {formData.email && (
-                        <button
-                          type="button"
-                          onClick={handleEnable2FA}
-                          className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
-                        >
-                          <Shield className="w-4 h-4" />
-                          <span>2FA</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
               </>
             )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={formData.password}
+                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 pr-12 text-white focus:border-purple-500 focus:outline-none"
+                  placeholder="Enter your password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
 
             <button
               type="submit"
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200"
             >
-              {showOTP ? 'Verify Code' : isLogin ? 'Sign In' : 'Create Account'}
+              {isLogin ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
-          {!showOTP && (
-            <div className="mt-6 text-center">
-              <button
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setError('');
-                  setFormData({
-                    identifier: '',
-                    password: '',
-                    displayName: '',
-                    writersTag: '',
-                    email: '',
-                    otp: ''
-                  });
-                }}
-                className="text-purple-400 hover:text-purple-300 transition-colors"
-              >
-                {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-              </button>
-            </div>
-          )}
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError('');
+                setFormData({
+                  identifier: '',
+                  password: '',
+                  displayName: '',
+                  writersTag: '',
+                  email: ''
+                });
+              }}
+              className="text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

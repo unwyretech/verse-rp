@@ -7,7 +7,7 @@ import PostCard from '../components/PostCard';
 
 const ExplorePage: React.FC = () => {
   const { user } = useAuth();
-  const { posts, characters, searchContent, getRecommendations, likePost, repostPost, followUser, unfollowUser } = useApp();
+  const { posts, characters, allUsers, searchContent, getRecommendations, likePost, repostPost, followUser, unfollowUser } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'trending' | 'tags' | 'characters' | 'writers' | 'search'>('trending');
   const [searchResults, setSearchResults] = useState<{
@@ -54,14 +54,7 @@ const ExplorePage: React.FC = () => {
     .slice(0, 8);
 
   // Get unique writers
-  const uniqueWriters = Array.from(
-    new Map(
-      posts
-        .filter(post => post.user && post.userId !== user?.id)
-        .map(post => post.user!)
-        .map(user => [user.id, user])
-    ).values()
-  ).slice(0, 10);
+  const uniqueWriters = allUsers.filter(writer => writer.id !== user?.id).slice(0, 10);
 
   const handleLike = (postId: string) => {
     likePost(postId);
@@ -72,11 +65,11 @@ const ExplorePage: React.FC = () => {
   };
 
   const handleFollowUser = (userId: string) => {
-    if (user?.following.includes(userId)) {
-      unfollowUser(userId);
-    } else {
-      followUser(userId);
-    }
+    followUser(userId);
+  };
+
+  const isUserFollowing = (userId: string) => {
+    return user?.following.includes(userId) || false;
   };
 
   return (
@@ -234,12 +227,12 @@ const ExplorePage: React.FC = () => {
                   <button
                     onClick={() => handleFollowUser(writer.id)}
                     className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                      user?.following.includes(writer.id)
+                      isUserFollowing(writer.id)
                         ? 'bg-gray-600 text-white hover:bg-gray-700'
                         : 'bg-purple-600 text-white hover:bg-purple-700'
                     }`}
                   >
-                    {user?.following.includes(writer.id) ? (
+                    {isUserFollowing(writer.id) ? (
                       <>
                         <UserMinus className="w-3 h-3" />
                         <span>Unfollow</span>
@@ -320,12 +313,12 @@ const ExplorePage: React.FC = () => {
                         <button
                           onClick={() => handleFollowUser(writer.id)}
                           className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                            user?.following.includes(writer.id)
+                            isUserFollowing(writer.id)
                               ? 'bg-gray-600 text-white hover:bg-gray-700'
                               : 'bg-purple-600 text-white hover:bg-purple-700'
                           }`}
                         >
-                          {user?.following.includes(writer.id) ? (
+                          {isUserFollowing(writer.id) ? (
                             <>
                               <UserMinus className="w-3 h-3" />
                               <span>Unfollow</span>

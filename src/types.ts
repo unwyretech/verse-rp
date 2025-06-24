@@ -59,6 +59,17 @@ export interface Post {
   parentPostId?: string;
   visibility: 'public' | 'followers' | 'private';
   tags: string[];
+  replies?: Reply[];
+}
+
+export interface Reply {
+  id: string;
+  content: string;
+  userId: string;
+  characterId?: string;
+  timestamp: Date;
+  user?: User;
+  character?: Character;
 }
 
 export interface Thread {

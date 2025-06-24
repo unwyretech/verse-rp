@@ -1,20 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, Edit3, Plus, Settings, MapPin, Calendar, Link as LinkIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
+import { User } from '../types';
 import CharacterCard from '../components/CharacterCard';
 import CreateCharacter from '../components/CreateCharacter';
 import EditProfile from '../components/EditProfile';
 
 const ProfilePage: React.FC = () => {
   const { user, updateUser } = useAuth();
-  const { characters, posts } = useApp();
-  const [activeTab, setActiveTab] = useState<'posts' | 'characters' | 'media'>('posts');
+  const { characters, posts, getUserFollowers, getUserFollowing } = useApp();
+  const [activeTab, setActiveTab] = useState<'posts' | 'characters' | 'followers' | 'following'>('posts');
   const [showCreateCharacter, setShowCreateCharacter] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [followers, setFollowers] = useState<User[]>([]);
+  const [following, setFollowing] = useState<User[]>([]);
 
   const userPosts = posts.filter(post => post.userId === user?.id);
   const userCharacters = characters.filter(char => char.userId === user?.id);
+
+  useEffect(() => {
+    if (user) {
+      if (activeTab === 'followers') {
+        loadFollowers();
+      } else if (activeTab === 'following') {
+        loadFollowing();
+      }
+    }
+  }, [activeTab, user]);
+
+  const loadFollowers = async () => {
+    if (user) {
+      const followersList = await getUserFollowers(user.id);
+      setFollowers(followersList);
+    }
+  };
+
+  const loadFollowing = async () => {
+    if (user) {
+      const followingList = await getUserFollowing(user.id);
+      setFollowing(followingList);
+    }
+  };
 
   if (!user) return null;
 
@@ -74,14 +101,20 @@ const ProfilePage: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-6 text-sm">
-              <div>
+              <button
+                onClick={() => setActiveTab('following')}
+                className="hover:text-white transition-colors"
+              >
                 <span className="font-bold text-white">{user.following.length}</span>
                 <span className="text-gray-400 ml-1">Following</span>
-              </div>
-              <div>
+              </button>
+              <button
+                onClick={() => setActiveTab('followers')}
+                className="hover:text-white transition-colors"
+              >
                 <span className="font-bold text-white">{user.followers.length}</span>
                 <span className="text-gray-400 ml-1">Followers</span>
-              </div>
+              </button>
               <div>
                 <span className="font-bold text-white">{userCharacters.length}</span>
                 <span className="text-gray-400 ml-1">Characters</span>
@@ -97,7 +130,8 @@ const ProfilePage: React.FC = () => {
           {[
             { key: 'posts', label: 'Posts', count: userPosts.length },
             { key: 'characters', label: 'Characters', count: userCharacters.length },
-            { key: 'media', label: 'Media', count: 0 }
+            { key: 'followers', label: 'Followers', count: user.followers.length },
+            { key: 'following', label: 'Following', count: user.following.length }
           ].map(tab => (
             <button
               key={tab.key}
@@ -180,9 +214,53 @@ const ProfilePage: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'media' && (
-          <div className="text-center py-12">
-            <p className="text-gray-400">Media gallery coming soon</p>
+        {activeTab === 'followers' && (
+          <div className="space-y-4">
+            {followers.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-400">No followers yet</p>
+              </div>
+            ) : (
+              followers.map(follower => (
+                <div key={follower.id} className="flex items-center space-x-4 p-4 bg-gray-800/30 rounded-lg hover:bg-gray-700/30 transition-colors cursor-pointer">
+                  <img
+                    src={follower.avatar}
+                    alt={follower.displayName}
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-white font-medium">{follower.displayName}</h3>
+                    <p className="text-gray-400 text-sm">@{follower.username}</p>
+                    <p className="text-purple-300 text-sm">#{follower.writersTag}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'following' && (
+          <div className="space-y-4">
+            {following.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-400">Not following anyone yet</p>
+              </div>
+            ) : (
+              following.map(user => (
+                <div key={user.id} className="flex items-center space-x-4 p-4 bg-gray-800/30 rounded-lg hover:bg-gray-700/30 transition-colors cursor-pointer">
+                  <img
+                    src={user.avatar}
+                    alt={user.displayName}
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-white font-medium">{user.displayName}</h3>
+                    <p className="text-gray-400 text-sm">@{user.username}</p>
+                    <p className="text-purple-300 text-sm">#{user.writersTag}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>

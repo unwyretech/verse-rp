@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit3, Trash2, Palette, Eye, UserPlus, UserMinus } from 'lucide-react';
+import { Edit3, Trash2, Eye, UserPlus, UserMinus } from 'lucide-react';
 import { Character } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
@@ -62,8 +62,8 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
   return (
     <>
       <div 
-        className="rounded-2xl border border-gray-700/50 overflow-hidden hover:bg-gray-700/30 transition-colors cursor-pointer"
-        style={{ backgroundColor: `${character.customColor}20` }}
+        className="rounded-2xl border border-gray-700/50 overflow-hidden hover:bg-gray-700/30 transition-colors cursor-pointer relative"
+        style={{ backgroundColor: `${character.customColor}50` }}
         onClick={handleViewProfile}
       >
         <div className="relative h-32">
@@ -97,11 +97,11 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
         </div>
 
         <div className="p-6">
-          <div className="flex items-center space-x-4 -mt-12 mb-4">
+          <div className="flex items-center space-x-4 -mt-16 mb-4 relative z-10">
             <img
               src={character.avatar}
               alt={character.name}
-              className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-800 bg-gray-800 relative z-10"
+              className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-800 bg-gray-800"
             />
             <div className="flex items-center space-x-2 mt-8">
               <span className="text-purple-300 text-sm">#{character.verseTag}</span>
@@ -139,42 +139,44 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
                 <span>{character.following.length} following</span>
               </div>
               
-              {showFollowButton && !isOwnCharacter && (
+              <div className="flex items-center space-x-2">
+                {showFollowButton && !isOwnCharacter && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFollow();
+                    }}
+                    className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                      isFollowing
+                        ? 'bg-gray-600 text-white hover:bg-gray-700'
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    {isFollowing ? (
+                      <>
+                        <UserMinus className="w-3 h-3" />
+                        <span>Unfollow</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-3 h-3" />
+                        <span>Follow</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleFollow();
+                    handleViewProfile();
                   }}
-                  className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                    isFollowing
-                      ? 'bg-gray-600 text-white hover:bg-gray-700'
-                      : 'bg-purple-600 text-white hover:bg-purple-700'
-                  }`}
+                  className="flex items-center space-x-1 px-3 py-1 bg-gray-700 text-white rounded-full text-sm hover:bg-gray-600 transition-colors"
                 >
-                  {isFollowing ? (
-                    <>
-                      <UserMinus className="w-3 h-3" />
-                      <span>Unfollow</span>
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="w-3 h-3" />
-                      <span>Follow</span>
-                    </>
-                  )}
+                  <Eye className="w-3 h-3" />
+                  <span>View</span>
                 </button>
-              )}
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleViewProfile();
-                }}
-                className="flex items-center space-x-1 px-3 py-1 bg-gray-700 text-white rounded-full text-sm hover:bg-gray-600 transition-colors"
-              >
-                <Eye className="w-3 h-3" />
-                <span>View</span>
-              </button>
+              </div>
             </div>
           </div>
         </div>

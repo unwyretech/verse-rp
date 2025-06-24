@@ -10,6 +10,7 @@ interface AppContextType {
   chats: Chat[];
   selectedCharacter: Character | null;
   unreadNotifications: number;
+  allUsers: User[];
   setCharacters: (characters: Character[]) => void;
   setPosts: (posts: Post[]) => void;
   setNotifications: (notifications: Notification[]) => void;
@@ -37,6 +38,10 @@ interface AppContextType {
   unfollowCharacter: (characterId: string, followerId?: string) => void;
   getPostComments: (postId: string) => Promise<any[]>;
   getFilteredPosts: (viewingAs?: Character | 'user') => Post[];
+  getUserFollowers: (userId: string) => Promise<User[]>;
+  getUserFollowing: (userId: string) => Promise<User[]>;
+  getCharacterFollowers: (characterId: string) => Promise<User[]>;
+  getCharacterFollowing: (characterId: string) => Promise<(User | Character)[]>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -56,6 +61,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
@@ -68,6 +74,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .channel('posts')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
         loadPosts();
+      })
+      .subscribe();
+
+    // Subscribe to characters
+    const charactersSubscription = supabase
+      .channel('characters')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'characters' }, () => {
+        loadCharacters();
+      })
+      .subscribe();
+
+    // Subscribe to profiles
+    const profilesSubscription = supabase
+      .channel('profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        loadAllUsers();
       })
       .subscribe();
 
@@ -92,19 +114,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .subscribe();
 
+    // Subscribe to follows
+    const followsSubscription = supabase
+      .channel('follows')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => {
+        loadAllUsers();
+      })
+      .subscribe();
+
     return () => {
       postsSubscription.unsubscribe();
+      charactersSubscription.unsubscribe();
+      profilesSubscription.unsubscribe();
       notificationsSubscription.unsubscribe();
       interactionsSubscription.unsubscribe();
+      followsSubscription.unsubscribe();
     };
   }, [user]);
 
-  // Auto-refresh timeline every second
+  // Auto-refresh every second
   useEffect(() => {
     if (!user) return;
 
     const interval = setInterval(() => {
       loadPosts();
+      loadCharacters();
+      loadAllUsers();
     }, 1000);
 
     return () => clearInterval(interval);
@@ -117,8 +152,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loadPosts();
       loadNotifications();
       loadChats();
+      loadAllUsers();
     }
   }, [user]);
+
+  const loadAllUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          follower_count:follows!follows_following_id_fkey(count),
+          following_count:follows!follows_follower_id_fkey(count)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedUsers: User[] = data.map(profile => ({
+        id: profile.id,
+        username: profile.username,
+        displayName: profile.display_name,
+        avatar: profile.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
+        headerImage: profile.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+        bio: profile.bio || '',
+        writersTag: profile.writers_tag,
+        email: profile.email,
+        twoFactorEnabled: profile.two_factor_enabled || false,
+        characters: [],
+        followers: profile.followers || [],
+        following: profile.following || [],
+        createdAt: new Date(profile.created_at),
+        privacySettings: {
+          profileVisibility: 'public',
+          messagePermissions: 'everyone',
+          tagNotifications: true,
+          directMessageNotifications: true
+        }
+      }));
+
+      setAllUsers(formattedUsers);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
 
   const loadCharacters = async () => {
     try {
@@ -163,7 +240,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           character:characters(*),
           profile:profiles(*),
           interactions:post_interactions(interaction_type, user_id),
-          comments:comments(count)
+          comments:comments(
+            id,
+            content,
+            user_id,
+            character_id,
+            created_at,
+            profile:profiles(*),
+            character:characters(*)
+          )
         `)
         .order('created_at', { ascending: false });
 
@@ -229,7 +314,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           threadId: post.thread_id,
           parentPostId: post.parent_post_id,
           visibility: post.visibility,
-          tags: post.tags || []
+          tags: post.tags || [],
+          replies: post.comments?.map((comment: any) => ({
+            id: comment.id,
+            content: comment.content,
+            userId: comment.user_id,
+            characterId: comment.character_id,
+            timestamp: new Date(comment.created_at),
+            user: comment.profile ? {
+              id: comment.profile.id,
+              username: comment.profile.username,
+              displayName: comment.profile.display_name,
+              avatar: comment.profile.avatar_url,
+              headerImage: comment.profile.header_image_url,
+              bio: comment.profile.bio,
+              writersTag: comment.profile.writers_tag,
+              email: comment.profile.email,
+              twoFactorEnabled: comment.profile.two_factor_enabled,
+              characters: [],
+              followers: comment.profile.followers || [],
+              following: comment.profile.following || [],
+              createdAt: new Date(comment.profile.created_at),
+              privacySettings: {
+                profileVisibility: 'public',
+                messagePermissions: 'everyone',
+                tagNotifications: true,
+                directMessageNotifications: true
+              }
+            } : undefined,
+            character: comment.character ? {
+              id: comment.character.id,
+              username: comment.character.username,
+              name: comment.character.name,
+              title: comment.character.title,
+              avatar: comment.character.avatar_url,
+              headerImage: comment.character.header_url,
+              bio: comment.character.bio,
+              universe: comment.character.universe,
+              verseTag: comment.character.verse_tag,
+              traits: comment.character.traits || [],
+              userId: comment.character.user_id,
+              customColor: comment.character.custom_color,
+              customFont: comment.character.custom_font,
+              followers: comment.character.followers || [],
+              following: comment.character.following || [],
+              createdAt: new Date(comment.character.created_at)
+            } : undefined
+          })) || []
         };
       });
 
@@ -479,6 +610,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addComment = async (postId: string, content: string, characterId?: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('comments')
+        .insert({
+          user_id: user.id,
+          post_id: postId,
+          character_id: characterId,
+          content
+        });
+
+      if (error) throw error;
+
+      // Create notification
+      const post = posts.find(p => p.id === postId);
+      if (post && post.userId !== user.id) {
+        await addNotification({
+          type: 'comment',
+          userId: post.userId,
+          fromUserId: user.id,
+          postId,
+          message: `${user.displayName} commented on your post`,
+          read: false
+        });
+      }
+
+      loadPosts();
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
+
   const updatePost = async (id: string, updates: Partial<Post>) => {
     try {
       const { error } = await supabase
@@ -610,40 +775,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addComment = async (postId: string, content: string, characterId?: string) => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('comments')
-        .insert({
-          user_id: user.id,
-          post_id: postId,
-          character_id: characterId,
-          content
-        });
-
-      if (error) throw error;
-
-      // Create notification
-      const post = posts.find(p => p.id === postId);
-      if (post && post.userId !== user.id) {
-        await addNotification({
-          type: 'comment',
-          userId: post.userId,
-          fromUserId: user.id,
-          postId,
-          message: `${user.displayName} commented on your post`,
-          read: false
-        });
-      }
-
-      loadPosts();
-    } catch (error) {
-      console.error('Error adding comment:', error);
-    }
-  };
-
   const getPostComments = async (postId: string) => {
     try {
       const { data, error } = await supabase
@@ -729,23 +860,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!user) return;
 
     try {
-      // Add to follows table
-      await supabase
+      // Check if already following
+      const { data: existingFollow } = await supabase
         .from('follows')
-        .insert({
-          follower_id: user.id,
-          following_id: userId
+        .select('id')
+        .eq('follower_id', user.id)
+        .eq('following_id', userId)
+        .single();
+
+      if (existingFollow) {
+        // Unfollow
+        await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', user.id)
+          .eq('following_id', userId);
+      } else {
+        // Follow
+        await supabase
+          .from('follows')
+          .insert({
+            follower_id: user.id,
+            following_id: userId
+          });
+
+        // Create notification
+        await addNotification({
+          type: 'follow',
+          userId,
+          fromUserId: user.id,
+          message: `${user.displayName} started following you`,
+          read: false
         });
+      }
 
-      // Create notification
-      await addNotification({
-        type: 'follow',
-        userId,
-        fromUserId: user.id,
-        message: `${user.displayName} started following you`,
-        read: false
-      });
-
+      loadAllUsers();
       loadNotifications();
     } catch (error) {
       console.error('Error following user:', error);
@@ -761,6 +910,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .delete()
         .eq('follower_id', user.id)
         .eq('following_id', userId);
+
+      loadAllUsers();
     } catch (error) {
       console.error('Error unfollowing user:', error);
     }
@@ -921,22 +1072,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       char.traits.some(trait => trait.toLowerCase().includes(lowerQuery))
     );
 
-    // Search users by writers tag and username
-    const uniqueUsers = Array.from(
-      new Map(
-        posts
-          .filter(post => post.user)
-          .map(post => post.user!)
-          .filter(user => 
-            user.username.toLowerCase().includes(lowerQuery) ||
-            user.displayName.toLowerCase().includes(lowerQuery) ||
-            user.writersTag.toLowerCase().includes(lowerQuery)
-          )
-          .map(user => [user.id, user])
-      ).values()
+    const filteredUsers = allUsers.filter(user => 
+      user.username.toLowerCase().includes(lowerQuery) ||
+      user.displayName.toLowerCase().includes(lowerQuery) ||
+      user.writersTag.toLowerCase().includes(lowerQuery)
     );
 
-    return { posts: filteredPosts, characters: filteredCharacters, users: uniqueUsers };
+    return { posts: filteredPosts, characters: filteredCharacters, users: filteredUsers };
   };
 
   const getRecommendations = () => {
@@ -953,7 +1095,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
       .slice(0, 5);
 
-    const recommendedWriters: User[] = [];
+    const recommendedWriters = allUsers
+      .filter(writer => writer.id !== user.id)
+      .slice(0, 5);
 
     return { writers: recommendedWriters, characters: recommendedCharacters };
   };
@@ -983,6 +1127,107 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const getUserFollowers = async (userId: string): Promise<User[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('follows')
+        .select(`
+          follower:profiles!follows_follower_id_fkey(*)
+        `)
+        .eq('following_id', userId);
+
+      if (error) throw error;
+
+      return data.map(follow => ({
+        id: follow.follower.id,
+        username: follow.follower.username,
+        displayName: follow.follower.display_name,
+        avatar: follow.follower.avatar_url,
+        headerImage: follow.follower.header_image_url,
+        bio: follow.follower.bio,
+        writersTag: follow.follower.writers_tag,
+        email: follow.follower.email,
+        twoFactorEnabled: follow.follower.two_factor_enabled,
+        characters: [],
+        followers: follow.follower.followers || [],
+        following: follow.follower.following || [],
+        createdAt: new Date(follow.follower.created_at),
+        privacySettings: {
+          profileVisibility: 'public',
+          messagePermissions: 'everyone',
+          tagNotifications: true,
+          directMessageNotifications: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading user followers:', error);
+      return [];
+    }
+  };
+
+  const getUserFollowing = async (userId: string): Promise<User[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('follows')
+        .select(`
+          following:profiles!follows_following_id_fkey(*)
+        `)
+        .eq('follower_id', userId);
+
+      if (error) throw error;
+
+      return data.map(follow => ({
+        id: follow.following.id,
+        username: follow.following.username,
+        displayName: follow.following.display_name,
+        avatar: follow.following.avatar_url,
+        headerImage: follow.following.header_image_url,
+        bio: follow.following.bio,
+        writersTag: follow.following.writers_tag,
+        email: follow.following.email,
+        twoFactorEnabled: follow.following.two_factor_enabled,
+        characters: [],
+        followers: follow.following.followers || [],
+        following: follow.following.following || [],
+        createdAt: new Date(follow.following.created_at),
+        privacySettings: {
+          profileVisibility: 'public',
+          messagePermissions: 'everyone',
+          tagNotifications: true,
+          directMessageNotifications: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading user following:', error);
+      return [];
+    }
+  };
+
+  const getCharacterFollowers = async (characterId: string): Promise<User[]> => {
+    const character = characters.find(c => c.id === characterId);
+    if (!character) return [];
+
+    const followers = allUsers.filter(user => character.followers.includes(user.id));
+    return followers;
+  };
+
+  const getCharacterFollowing = async (characterId: string): Promise<(User | Character)[]> => {
+    const character = characters.find(c => c.id === characterId);
+    if (!character) return [];
+
+    const following: (User | Character)[] = [];
+    
+    // Add followed users
+    const followedUsers = allUsers.filter(user => character.following.includes(user.id));
+    following.push(...followedUsers);
+    
+    // Add followed characters
+    const followedCharacters = characters.filter(char => character.following.includes(char.id));
+    following.push(...followedCharacters);
+    
+    return following;
+  };
+
   return (
     <AppContext.Provider value={{
       characters,
@@ -991,6 +1236,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       chats,
       selectedCharacter,
       unreadNotifications,
+      allUsers,
       setCharacters,
       setPosts,
       setNotifications,
@@ -1017,7 +1263,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       followCharacter,
       unfollowCharacter,
       getPostComments,
-      getFilteredPosts
+      getFilteredPosts,
+      getUserFollowers,
+      getUserFollowing,
+      getCharacterFollowers,
+      getCharacterFollowing
     }}>
       {children}
     </AppContext.Provider>
