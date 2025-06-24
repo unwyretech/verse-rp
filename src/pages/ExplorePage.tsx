@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Search, TrendingUp, Hash, Users, Sparkles } from 'lucide-react';
+import { Search, TrendingUp, Hash, Users, Sparkles, UserPlus, UserMinus } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import CharacterCard from '../components/CharacterCard';
 import PostCard from '../components/PostCard';
 
 const ExplorePage: React.FC = () => {
-  const { posts, characters, searchContent, getRecommendations, updatePost } = useApp();
+  const { user } = useAuth();
+  const { posts, characters, searchContent, getRecommendations, likePost, repostPost, followUser, unfollowUser } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'trending' | 'tags' | 'characters' | 'search'>('trending');
+  const [activeTab, setActiveTab] = useState<'trending' | 'tags' | 'characters' | 'writers' | 'search'>('trending');
   const [searchResults, setSearchResults] = useState<{
     posts: any[];
     characters: any[];
@@ -51,23 +53,29 @@ const ExplorePage: React.FC = () => {
     .filter((tag, index, arr) => arr.indexOf(tag) === index)
     .slice(0, 8);
 
+  // Get unique writers
+  const uniqueWriters = Array.from(
+    new Map(
+      posts
+        .filter(post => post.user && post.userId !== user?.id)
+        .map(post => post.user!)
+        .map(user => [user.id, user])
+    ).values()
+  ).slice(0, 10);
+
   const handleLike = (postId: string) => {
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-      updatePost(postId, {
-        isLiked: !post.isLiked,
-        likes: post.isLiked ? post.likes - 1 : post.likes + 1
-      });
-    }
+    likePost(postId);
   };
 
   const handleRepost = (postId: string) => {
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-      updatePost(postId, {
-        isReposted: !post.isReposted,
-        reposts: post.isReposted ? post.reposts - 1 : post.reposts + 1
-      });
+    repostPost(postId);
+  };
+
+  const handleFollowUser = (userId: string) => {
+    if (user?.following.includes(userId)) {
+      unfollowUser(userId);
+    } else {
+      followUser(userId);
     }
   };
 
@@ -92,6 +100,7 @@ const ExplorePage: React.FC = () => {
             { key: 'trending', label: 'Trending', icon: TrendingUp },
             { key: 'tags', label: 'Tags', icon: Hash },
             { key: 'characters', label: 'Characters', icon: Users },
+            { key: 'writers', label: 'Writers', icon: UserPlus },
             ...(searchQuery ? [{ key: 'search', label: 'Search Results', icon: Search }] : [])
           ].map(tab => (
             <button
@@ -126,6 +135,7 @@ const ExplorePage: React.FC = () => {
                       key={character.id} 
                       character={character} 
                       showActions={false}
+                      showFollowButton={true}
                     />
                   ))}
                 </div>
@@ -195,11 +205,59 @@ const ExplorePage: React.FC = () => {
                 key={character.id} 
                 character={character} 
                 showActions={false}
+                showFollowButton={character.userId !== user?.id}
               />
             )) : (
               <div className="col-span-full text-center py-12">
                 <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-400">No characters found</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'writers' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {uniqueWriters.length > 0 ? uniqueWriters.map(writer => (
+              <div key={writer.id} className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                <div className="flex items-center space-x-4 mb-4">
+                  <img
+                    src={writer.avatar}
+                    alt={writer.displayName}
+                    className="w-16 h-16 rounded-full object-cover ring-2 ring-purple-500/30"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-white font-bold text-lg">{writer.displayName}</h3>
+                    <p className="text-gray-400">@{writer.username}</p>
+                    <p className="text-purple-300 text-sm">#{writer.writersTag}</p>
+                  </div>
+                  <button
+                    onClick={() => handleFollowUser(writer.id)}
+                    className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                      user?.following.includes(writer.id)
+                        ? 'bg-gray-600 text-white hover:bg-gray-700'
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    {user?.following.includes(writer.id) ? (
+                      <>
+                        <UserMinus className="w-3 h-3" />
+                        <span>Unfollow</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-3 h-3" />
+                        <span>Follow</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-gray-300 text-sm">{writer.bio}</p>
+              </div>
+            )) : (
+              <div className="col-span-full text-center py-12">
+                <UserPlus className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400">No writers found</p>
               </div>
             )}
           </div>
@@ -234,14 +292,61 @@ const ExplorePage: React.FC = () => {
                       key={character.id} 
                       character={character} 
                       showActions={false}
+                      showFollowButton={character.userId !== user?.id}
                     />
                   ))}
                 </div>
               </div>
             )}
 
+            {/* Search Results for Writers */}
+            {searchResults.users.length > 0 && (
+              <div>
+                <h3 className="text-lg font-bold text-white mb-4">Writers</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {searchResults.users.map(writer => (
+                    <div key={writer.id} className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                      <div className="flex items-center space-x-4 mb-4">
+                        <img
+                          src={writer.avatar}
+                          alt={writer.displayName}
+                          className="w-16 h-16 rounded-full object-cover ring-2 ring-purple-500/30"
+                        />
+                        <div className="flex-1">
+                          <h3 className="text-white font-bold text-lg">{writer.displayName}</h3>
+                          <p className="text-gray-400">@{writer.username}</p>
+                          <p className="text-purple-300 text-sm">#{writer.writersTag}</p>
+                        </div>
+                        <button
+                          onClick={() => handleFollowUser(writer.id)}
+                          className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                            user?.following.includes(writer.id)
+                              ? 'bg-gray-600 text-white hover:bg-gray-700'
+                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                          }`}
+                        >
+                          {user?.following.includes(writer.id) ? (
+                            <>
+                              <UserMinus className="w-3 h-3" />
+                              <span>Unfollow</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-3 h-3" />
+                              <span>Follow</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <p className="text-gray-300 text-sm">{writer.bio}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* No Results */}
-            {searchResults.posts.length === 0 && searchResults.characters.length === 0 && (
+            {searchResults.posts.length === 0 && searchResults.characters.length === 0 && searchResults.users.length === 0 && (
               <div className="text-center py-12">
                 <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-400 mb-2">No results found</h3>

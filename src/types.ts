@@ -36,6 +36,8 @@ export interface Character {
   userId: string;
   customColor: string;
   customFont: string;
+  followers: string[];
+  following: string[];
   createdAt: Date;
 }
 

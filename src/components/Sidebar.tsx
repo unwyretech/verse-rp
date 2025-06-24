@@ -55,7 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications }) => {
         </nav>
 
         <button
-          onClick={() => {/* Handle create post */}}
+          onClick={() => navigate('/')}
           className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-4 rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-purple-500/25"
         >
           <Plus className="w-5 h-5" />

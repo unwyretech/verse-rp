@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Feather, Eye, EyeOff, Shield, User } from 'lucide-react';
+import { Feather, Eye, EyeOff, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -72,37 +72,6 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleLocalTestLogin = () => {
-    // Create a local test user and bypass authentication
-    const testUser = {
-      id: 'local-test-user',
-      username: 'test_user',
-      displayName: 'Test User',
-      avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
-      headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
-      bio: 'Local test user for development',
-      writersTag: 'testing',
-      email: 'test@local.dev',
-      twoFactorEnabled: false,
-      characters: [],
-      followers: [],
-      following: [],
-      createdAt: new Date(),
-      privacySettings: {
-        profileVisibility: 'public' as const,
-        messagePermissions: 'everyone' as const,
-        tagNotifications: true,
-        directMessageNotifications: true
-      }
-    };
-
-    // Store in localStorage to persist across page reloads
-    localStorage.setItem('localTestUser', JSON.stringify(testUser));
-    
-    // Trigger a page reload to let the auth context pick up the local user
-    window.location.reload();
-  };
-
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -120,19 +89,6 @@ const LoginPage: React.FC = () => {
               {showOTP ? 'Enter verification code' : isLogin ? 'Welcome back' : 'Join the community'}
             </p>
           </div>
-
-          {/* Demo Credentials */}
-          {isLogin && !showOTP && (
-            <div className="mb-6 p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg">
-              <h3 className="text-purple-300 font-semibold mb-2">Demo Accounts:</h3>
-              <div className="space-y-1 text-sm text-gray-300">
-                <p><strong>Username:</strong> alice_writer | <strong>Password:</strong> password123</p>
-                <p><strong>Username:</strong> bob_scifi | <strong>Password:</strong> password123</p>
-                <p><strong>Username:</strong> carol_modern | <strong>Password:</strong> password123</p>
-                <p><strong>Username:</strong> david_marvel | <strong>Password:</strong> password123</p>
-              </div>
-            </div>
-          )}
 
           {error && (
             <div className="mb-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
@@ -265,40 +221,24 @@ const LoginPage: React.FC = () => {
           </form>
 
           {!showOTP && (
-            <div className="mt-6 space-y-4">
-              <div className="text-center">
-                <button
-                  onClick={() => {
-                    setIsLogin(!isLogin);
-                    setError('');
-                    setFormData({
-                      identifier: '',
-                      password: '',
-                      displayName: '',
-                      writersTag: '',
-                      email: '',
-                      otp: ''
-                    });
-                  }}
-                  className="text-purple-400 hover:text-purple-300 transition-colors"
-                >
-                  {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-                </button>
-              </div>
-
-              {/* Local Test Profile Button */}
-              <div className="border-t border-gray-700/50 pt-4">
-                <button
-                  onClick={handleLocalTestLogin}
-                  className="w-full flex items-center justify-center space-x-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-medium py-3 rounded-lg transition-all duration-200 border border-gray-600"
-                >
-                  <User className="w-5 h-5" />
-                  <span>Continue with Local Test Profile</span>
-                </button>
-                <p className="text-gray-500 text-xs text-center mt-2">
-                  For development and testing purposes
-                </p>
-              </div>
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setError('');
+                  setFormData({
+                    identifier: '',
+                    password: '',
+                    displayName: '',
+                    writersTag: '',
+                    email: '',
+                    otp: ''
+                  });
+                }}
+                className="text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+              </button>
             </div>
           )}
         </div>

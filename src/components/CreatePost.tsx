@@ -1,24 +1,31 @@
 import React, { useState } from 'react';
 import { X, Image, Smile, Calendar, MapPin, Globe, Users, Lock } from 'lucide-react';
 import { Character } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CreatePostProps {
   characters: Character[];
   selectedCharacter: Character | null;
   onCreatePost: (content: string, character?: Character) => void;
   onClose: () => void;
+  replyToPost?: any;
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ 
   characters, 
   selectedCharacter, 
   onCreatePost, 
-  onClose 
+  onClose,
+  replyToPost
 }) => {
+  const { user } = useAuth();
   const [content, setContent] = useState('');
   const [activeCharacter, setActiveCharacter] = useState<Character | null>(selectedCharacter);
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public');
   const [isThread, setIsThread] = useState(false);
+
+  // Only show user's own characters
+  const userCharacters = characters.filter(char => char.userId === user?.id);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,9 +54,34 @@ const CreatePost: React.FC<CreatePostProps> = ({
           >
             <X className="w-6 h-6 text-gray-400" />
           </button>
-          <h2 className="text-lg font-bold text-white">Create Post</h2>
+          <h2 className="text-lg font-bold text-white">
+            {replyToPost ? 'Reply to Post' : 'Create Post'}
+          </h2>
           <div className="w-10" />
         </div>
+
+        {replyToPost && (
+          <div className="p-4 bg-gray-800/30 border-b border-gray-700/50">
+            <div className="flex space-x-3">
+              <img
+                src={replyToPost.character?.avatar || replyToPost.user?.avatar}
+                alt={replyToPost.character?.name || replyToPost.user?.displayName}
+                className="w-8 h-8 rounded-full object-cover"
+              />
+              <div className="flex-1">
+                <div className="flex items-center space-x-2 mb-1">
+                  <span className="font-medium text-white">
+                    {replyToPost.character?.name || replyToPost.user?.displayName}
+                  </span>
+                  <span className="text-gray-500 text-sm">
+                    @{replyToPost.character?.username || replyToPost.user?.username}
+                  </span>
+                </div>
+                <p className="text-gray-300 text-sm">{replyToPost.content}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="p-6">
           <div className="flex space-x-4 mb-4">
@@ -61,7 +93,11 @@ const CreatePost: React.FC<CreatePostProps> = ({
                   className="w-12 h-12 rounded-full object-cover"
                 />
               ) : (
-                <span className="text-white font-semibold">U</span>
+                <img
+                  src={user?.avatar}
+                  alt={user?.displayName}
+                  className="w-12 h-12 rounded-full object-cover"
+                />
               )}
             </div>
             <div className="flex-1">
@@ -72,14 +108,14 @@ const CreatePost: React.FC<CreatePostProps> = ({
                     if (e.target.value === 'user') {
                       setActiveCharacter(null);
                     } else {
-                      const character = characters.find(c => c.id === e.target.value);
+                      const character = userCharacters.find(c => c.id === e.target.value);
                       setActiveCharacter(character || null);
                     }
                   }}
                   className="bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-1 text-sm focus:border-purple-500 focus:outline-none"
                 >
                   <option value="user">Post as yourself</option>
-                  {characters.map((character) => (
+                  {userCharacters.map((character) => (
                     <option key={character.id} value={character.id}>
                       {character.name} - {character.title}
                     </option>
@@ -98,26 +134,31 @@ const CreatePost: React.FC<CreatePostProps> = ({
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder={activeCharacter 
-              ? `What's happening in ${activeCharacter.name}'s world?`
-              : "What's on your mind?"
+            placeholder={
+              replyToPost
+                ? "Write your reply..."
+                : activeCharacter 
+                  ? `What's happening in ${activeCharacter.name}'s world?`
+                  : "What's on your mind?"
             }
             className="w-full bg-transparent text-white text-xl placeholder-gray-500 resize-none border-none outline-none min-h-[120px]"
             maxLength={maxLength}
           />
 
           <div className="space-y-4 pt-4 border-t border-gray-700/50">
-            <div className="flex items-center space-x-4">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isThread}
-                  onChange={(e) => setIsThread(e.target.checked)}
-                  className="text-purple-600 focus:ring-purple-500 rounded"
-                />
-                <span className="text-gray-300 text-sm">Create as thread</span>
-              </label>
-            </div>
+            {!replyToPost && (
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isThread}
+                    onChange={(e) => setIsThread(e.target.checked)}
+                    className="text-purple-600 focus:ring-purple-500 rounded"
+                  />
+                  <span className="text-gray-300 text-sm">Create as thread</span>
+                </label>
+              </div>
+            )}
 
             <div>
               <p className="text-gray-300 text-sm mb-2">Who can see this?</p>
@@ -208,7 +249,7 @@ const CreatePost: React.FC<CreatePostProps> = ({
                 disabled={!content.trim() || characterCount > maxLength}
                 className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold px-6 py-2 rounded-full hover:from-purple-700 hover:to-pink-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isThread ? 'Start Thread' : 'Post'}
+                {replyToPost ? 'Reply' : isThread ? 'Start Thread' : 'Post'}
               </button>
             </div>
           </div>
