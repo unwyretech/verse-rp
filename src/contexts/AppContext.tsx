@@ -11,6 +11,9 @@ interface AppContextType {
   selectedCharacter: Character | null;
   unreadNotifications: number;
   allUsers: User[];
+  bookmarkedPosts: string[];
+  bookmarkedCharacters: string[];
+  bookmarkedUsers: string[];
   setCharacters: (characters: Character[]) => void;
   setPosts: (posts: Post[]) => void;
   setNotifications: (notifications: Notification[]) => void;
@@ -28,7 +31,7 @@ interface AppContextType {
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   markNotificationAsRead: (id: string) => void;
   clearAllNotifications: () => void;
-  sendMessage: (chatId: string, content: string, senderId: string) => void;
+  sendMessage: (chatId: string, content: string, senderId: string, mediaUrl?: string) => void;
   createChat: (participants: string[], isGroup?: boolean, name?: string) => Chat;
   searchContent: (query: string) => { posts: Post[], characters: Character[], users: User[] };
   getRecommendations: () => { writers: User[], characters: Character[] };
@@ -42,6 +45,12 @@ interface AppContextType {
   getUserFollowing: (userId: string) => Promise<User[]>;
   getCharacterFollowers: (characterId: string) => Promise<User[]>;
   getCharacterFollowing: (characterId: string) => Promise<(User | Character)[]>;
+  bookmarkPost: (postId: string) => void;
+  bookmarkCharacter: (characterId: string) => void;
+  bookmarkUser: (userId: string) => void;
+  unbookmarkPost: (postId: string) => void;
+  unbookmarkCharacter: (characterId: string) => void;
+  unbookmarkUser: (userId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -62,6 +71,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([]);
+  const [bookmarkedCharacters, setBookmarkedCharacters] = useState<string[]>([]);
+  const [bookmarkedUsers, setBookmarkedUsers] = useState<string[]>([]);
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
@@ -153,8 +165,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loadNotifications();
       loadChats();
       loadAllUsers();
+      loadBookmarks();
     }
   }, [user]);
+
+  const loadBookmarks = () => {
+    if (!user) return;
+    
+    // Load from localStorage for now
+    const savedBookmarkedPosts = localStorage.getItem(`bookmarkedPosts_${user.id}`);
+    const savedBookmarkedCharacters = localStorage.getItem(`bookmarkedCharacters_${user.id}`);
+    const savedBookmarkedUsers = localStorage.getItem(`bookmarkedUsers_${user.id}`);
+    
+    if (savedBookmarkedPosts) {
+      setBookmarkedPosts(JSON.parse(savedBookmarkedPosts));
+    }
+    if (savedBookmarkedCharacters) {
+      setBookmarkedCharacters(JSON.parse(savedBookmarkedCharacters));
+    }
+    if (savedBookmarkedUsers) {
+      setBookmarkedUsers(JSON.parse(savedBookmarkedUsers));
+    }
+  };
+
+  const saveBookmarks = (type: 'posts' | 'characters' | 'users', bookmarks: string[]) => {
+    if (!user) return;
+    localStorage.setItem(`bookmarked${type.charAt(0).toUpperCase() + type.slice(1)}_${user.id}`, JSON.stringify(bookmarks));
+  };
 
   const loadAllUsers = async () => {
     try {
@@ -315,6 +352,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           parentPostId: post.parent_post_id,
           visibility: post.visibility,
           tags: post.tags || [],
+          mediaUrls: post.media_urls || [],
           replies: post.comments?.map((comment: any) => ({
             id: comment.id,
             content: comment.content,
@@ -582,7 +620,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           is_thread: post.isThread,
           thread_id: post.threadId,
           parent_post_id: post.parentPostId,
-          tags: post.tags
+          tags: post.tags,
+          media_urls: post.mediaUrls || []
         })
         .select()
         .single();
@@ -652,6 +691,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           content: updates.content,
           visibility: updates.visibility,
           tags: updates.tags,
+          media_urls: updates.mediaUrls,
           updated_at: new Date().toISOString()
         })
         .eq('id', id);
@@ -965,7 +1005,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const sendMessage = async (chatId: string, content: string, senderId: string) => {
+  const sendMessage = async (chatId: string, content: string, senderId: string, mediaUrl?: string) => {
     try {
       const encryptedContent = encryptData(content);
       
@@ -975,7 +1015,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           chat_id: chatId,
           sender_id: senderId,
           content: encryptedContent,
-          is_encrypted: true
+          is_encrypted: true,
+          media_url: mediaUrl
         })
         .select()
         .single();
@@ -1228,6 +1269,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return following;
   };
 
+  const bookmarkPost = (postId: string) => {
+    if (!user) return;
+    const newBookmarks = [...bookmarkedPosts, postId];
+    setBookmarkedPosts(newBookmarks);
+    saveBookmarks('posts', newBookmarks);
+  };
+
+  const bookmarkCharacter = (characterId: string) => {
+    if (!user) return;
+    const newBookmarks = [...bookmarkedCharacters, characterId];
+    setBookmarkedCharacters(newBookmarks);
+    saveBookmarks('characters', newBookmarks);
+  };
+
+  const bookmarkUser = (userId: string) => {
+    if (!user) return;
+    const newBookmarks = [...bookmarkedUsers, userId];
+    setBookmarkedUsers(newBookmarks);
+    saveBookmarks('users', newBookmarks);
+  };
+
+  const unbookmarkPost = (postId: string) => {
+    if (!user) return;
+    const newBookmarks = bookmarkedPosts.filter(id => id !== postId);
+    setBookmarkedPosts(newBookmarks);
+    saveBookmarks('posts', newBookmarks);
+  };
+
+  const unbookmarkCharacter = (characterId: string) => {
+    if (!user) return;
+    const newBookmarks = bookmarkedCharacters.filter(id => id !== characterId);
+    setBookmarkedCharacters(newBookmarks);
+    saveBookmarks('characters', newBookmarks);
+  };
+
+  const unbookmarkUser = (userId: string) => {
+    if (!user) return;
+    const newBookmarks = bookmarkedUsers.filter(id => id !== userId);
+    setBookmarkedUsers(newBookmarks);
+    saveBookmarks('users', newBookmarks);
+  };
+
   return (
     <AppContext.Provider value={{
       characters,
@@ -1237,6 +1320,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       selectedCharacter,
       unreadNotifications,
       allUsers,
+      bookmarkedPosts,
+      bookmarkedCharacters,
+      bookmarkedUsers,
       setCharacters,
       setPosts,
       setNotifications,
@@ -1267,7 +1353,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       getUserFollowers,
       getUserFollowing,
       getCharacterFollowers,
-      getCharacterFollowing
+      getCharacterFollowing,
+      bookmarkPost,
+      bookmarkCharacter,
+      bookmarkUser,
+      unbookmarkPost,
+      unbookmarkCharacter,
+      unbookmarkUser
     }}>
       {children}
     </AppContext.Provider>

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { X, Image, Smile, Calendar, MapPin, Globe, Users, Lock } from 'lucide-react';
+import { X, Image, Video, Smile, Calendar, MapPin, Globe, Users, Lock } from 'lucide-react';
 import { Character } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 interface CreatePostProps {
   characters: Character[];
   selectedCharacter: Character | null;
-  onCreatePost: (content: string, character?: Character) => void;
+  onCreatePost: (content: string, character?: Character, mediaUrls?: string[]) => void;
   onClose: () => void;
   replyToPost?: any;
 }
@@ -23,6 +23,7 @@ const CreatePost: React.FC<CreatePostProps> = ({
   const [activeCharacter, setActiveCharacter] = useState<Character | null>(selectedCharacter);
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public');
   const [isThread, setIsThread] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
 
   // Only show user's own characters
   const userCharacters = characters.filter(char => char.userId === user?.id);
@@ -30,9 +31,26 @@ const CreatePost: React.FC<CreatePostProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (content.trim()) {
-      onCreatePost(content.trim(), activeCharacter || undefined);
+      onCreatePost(content.trim(), activeCharacter || undefined, mediaUrls);
       setContent('');
+      setMediaUrls([]);
     }
+  };
+
+  const handleImageUpload = () => {
+    // Mock image upload
+    const mockImageUrl = 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=600';
+    setMediaUrls(prev => [...prev, mockImageUrl]);
+  };
+
+  const handleVideoUpload = () => {
+    // Mock video upload
+    const mockVideoUrl = 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4';
+    setMediaUrls(prev => [...prev, mockVideoUrl]);
+  };
+
+  const removeMedia = (index: number) => {
+    setMediaUrls(prev => prev.filter((_, i) => i !== index));
   };
 
   const characterCount = content.length;
@@ -73,6 +91,7 @@ const CreatePost: React.FC<CreatePostProps> = ({
                   <span className="font-medium text-white">
                     {replyToPost.character?.name || replyToPost.user?.displayName}
                   </span>
+                  
                   <span className="text-gray-500 text-sm">
                     @{replyToPost.character?.username || replyToPost.user?.username}
                   </span>
@@ -145,6 +164,36 @@ const CreatePost: React.FC<CreatePostProps> = ({
             maxLength={maxLength}
           />
 
+          {/* Media Preview */}
+          {mediaUrls.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              {mediaUrls.map((url, index) => (
+                <div key={index} className="relative">
+                  {url.includes('.mp4') ? (
+                    <video
+                      src={url}
+                      className="w-full h-32 object-cover rounded-lg"
+                      controls
+                    />
+                  ) : (
+                    <img
+                      src={url}
+                      alt="Upload"
+                      className="w-full h-32 object-cover rounded-lg"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeMedia(index)}
+                    className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 rounded-full transition-colors"
+                  >
+                    <X className="w-4 h-4 text-white" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="space-y-4 pt-4 border-t border-gray-700/50">
             {!replyToPost && (
               <div className="flex items-center space-x-4">
@@ -186,9 +235,17 @@ const CreatePost: React.FC<CreatePostProps> = ({
             <div className="flex items-center space-x-4">
               <button
                 type="button"
+                onClick={handleImageUpload}
                 className="p-2 text-purple-400 hover:bg-purple-400/10 rounded-full transition-colors"
               >
                 <Image className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleVideoUpload}
+                className="p-2 text-purple-400 hover:bg-purple-400/10 rounded-full transition-colors"
+              >
+                <Video className="w-5 h-5" />
               </button>
               <button
                 type="button"

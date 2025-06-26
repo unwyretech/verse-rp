@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, ChevronDown } from 'lucide-react';
 import PostCard from './PostCard';
 import { Post, Character } from '../types';
@@ -14,7 +14,7 @@ interface TimelineProps {
 
 const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePost }) => {
   const { user } = useAuth();
-  const { characters, getFilteredPosts } = useApp();
+  const { characters, getFilteredPosts, allUsers } = useApp();
   const [viewingAs, setViewingAs] = useState<Character | 'user' | null>('user');
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -146,6 +146,13 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
             />
           ))
         )}
+      </div>
+
+      {/* Footer */}
+      <div className="p-6 text-center border-t border-gray-700/50 bg-black/20">
+        <p className="text-gray-500 text-sm">
+          Verse © {new Date().getFullYear()} - UNWYRE TECH AND CONSULTING
+        </p>
       </div>
     </div>
   );

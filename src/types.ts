@@ -59,6 +59,7 @@ export interface Post {
   parentPostId?: string;
   visibility: 'public' | 'followers' | 'private';
   tags: string[];
+  mediaUrls?: string[];
   replies?: Reply[];
 }
 
@@ -91,6 +92,7 @@ export interface Message {
   timestamp: Date;
   isEncrypted: boolean;
   readBy: string[];
+  mediaUrl?: string;
 }
 
 export interface Chat {
