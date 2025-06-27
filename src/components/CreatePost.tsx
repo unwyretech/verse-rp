@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Image, Video, Smile, Calendar, MapPin, Globe, Users, Lock } from 'lucide-react';
+import { X, Image, Video, Smile, Calendar, MapPin, Globe, Users, Lock, Upload } from 'lucide-react';
 import { Character } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { uploadImage } from '../lib/supabase';
 
 interface CreatePostProps {
   characters: Character[];
@@ -24,6 +25,7 @@ const CreatePost: React.FC<CreatePostProps> = ({
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public');
   const [isThread, setIsThread] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   // Only show user's own characters
   const userCharacters = characters.filter(char => char.userId === user?.id);
@@ -37,16 +39,48 @@ const CreatePost: React.FC<CreatePostProps> = ({
     }
   };
 
+  const handleFileUpload = async (file: File, type: 'image' | 'video') => {
+    if (!user) return;
+
+    setUploading(true);
+    try {
+      const bucket = type === 'image' ? 'post-images' : 'post-videos';
+      const path = `${user.id}/${type}_${Date.now()}.${file.name.split('.').pop()}`;
+      
+      const mediaUrl = await uploadImage(file, bucket, path);
+      if (mediaUrl) {
+        setMediaUrls(prev => [...prev, mediaUrl]);
+      } else {
+        alert('Failed to upload file');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleImageUpload = () => {
-    // Mock image upload
-    const mockImageUrl = 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=600';
-    setMediaUrls(prev => [...prev, mockImageUrl]);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) handleFileUpload(file, 'image');
+    };
+    input.click();
   };
 
   const handleVideoUpload = () => {
-    // Mock video upload
-    const mockVideoUrl = 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4';
-    setMediaUrls(prev => [...prev, mockVideoUrl]);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) handleFileUpload(file, 'video');
+    };
+    input.click();
   };
 
   const removeMedia = (index: number) => {
@@ -169,7 +203,7 @@ const CreatePost: React.FC<CreatePostProps> = ({
             <div className="grid grid-cols-2 gap-2 mt-4">
               {mediaUrls.map((url, index) => (
                 <div key={index} className="relative">
-                  {url.includes('.mp4') ? (
+                  {url.includes('.mp4') || url.includes('.mov') || url.includes('.avi') ? (
                     <video
                       src={url}
                       className="w-full h-32 object-cover rounded-lg"
@@ -236,14 +270,16 @@ const CreatePost: React.FC<CreatePostProps> = ({
               <button
                 type="button"
                 onClick={handleImageUpload}
-                className="p-2 text-purple-400 hover:bg-purple-400/10 rounded-full transition-colors"
+                disabled={uploading}
+                className="p-2 text-purple-400 hover:bg-purple-400/10 rounded-full transition-colors disabled:opacity-50"
               >
-                <Image className="w-5 h-5" />
+                {uploading ? <Upload className="w-5 h-5 animate-spin" /> : <Image className="w-5 h-5" />}
               </button>
               <button
                 type="button"
                 onClick={handleVideoUpload}
-                className="p-2 text-purple-400 hover:bg-purple-400/10 rounded-full transition-colors"
+                disabled={uploading}
+                className="p-2 text-purple-400 hover:bg-purple-400/10 rounded-full transition-colors disabled:opacity-50"
               >
                 <Video className="w-5 h-5" />
               </button>
@@ -303,7 +339,7 @@ const CreatePost: React.FC<CreatePostProps> = ({
 
               <button
                 type="submit"
-                disabled={!content.trim() || characterCount > maxLength}
+                disabled={!content.trim() || characterCount > maxLength || uploading}
                 className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold px-6 py-2 rounded-full hover:from-purple-700 hover:to-pink-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {replyToPost ? 'Reply' : isThread ? 'Start Thread' : 'Post'}

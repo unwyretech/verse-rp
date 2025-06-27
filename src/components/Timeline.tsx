@@ -21,7 +21,7 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
   // Only show user's own characters
   const userCharacters = characters.filter(char => char.userId === user?.id);
 
-  // Get filtered posts based on selected viewing mode
+  // Get filtered posts based on selected viewing mode and following relationships
   const filteredPosts = getFilteredPosts(viewingAs || 'user');
 
   const handleViewingChange = (option: Character | 'user') => {

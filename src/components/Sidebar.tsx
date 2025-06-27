@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Search, Bell, Mail, Bookmark, User, Settings, Feather, Plus, Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useApp } from '../contexts/AppContext';
 
 interface SidebarProps {
   unreadNotifications: number;
@@ -13,12 +14,13 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { unreadMessages } = useApp();
 
   const menuItems = [
     { icon: Home, label: 'Home', path: '/' },
     { icon: Search, label: 'Explore', path: '/explore' },
     { icon: Bell, label: 'Notifications', path: '/notifications', badge: unreadNotifications },
-    { icon: Mail, label: 'Messages', path: '/messages' },
+    { icon: Mail, label: 'Messages', path: '/messages', badge: unreadMessages },
     { icon: Bookmark, label: 'Bookmarks', path: '/bookmarks' },
     { icon: User, label: 'Profile', path: '/profile' },
     { icon: Settings, label: 'Settings', path: '/settings' },

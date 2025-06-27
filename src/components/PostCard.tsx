@@ -23,7 +23,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost, showReplies
   const [selectedCharacter, setSelectedCharacter] = useState<string>('user');
 
   // Use character data if available, otherwise fall back to user data
-  const displayAvatar = post.character?.avatar || post.user?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150';
+  const displayAvatar = post.character?.avatar || post.user?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
   const displayName = post.character?.name || post.user?.displayName || post.user?.username || 'Unknown User';
   const displayTitle = post.character?.title || '';
   const displayUniverse = post.character?.universe;
@@ -165,6 +165,29 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost, showReplies
                 <p className="text-gray-100 leading-relaxed whitespace-pre-wrap">{post.content}</p>
               )}
             </div>
+
+            {/* Media Display */}
+            {post.mediaUrls && post.mediaUrls.length > 0 && (
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                {post.mediaUrls.map((url, index) => (
+                  <div key={index} className="rounded-lg overflow-hidden">
+                    {url.includes('.mp4') || url.includes('.mov') || url.includes('.avi') ? (
+                      <video
+                        src={url}
+                        className="w-full h-48 object-cover"
+                        controls
+                      />
+                    ) : (
+                      <img
+                        src={url}
+                        alt="Post media"
+                        className="w-full h-48 object-cover"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex items-center justify-between max-w-md">
               <button 

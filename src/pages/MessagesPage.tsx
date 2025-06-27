@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video } from 'lucide-react';
+import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video, Upload } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Chat, Message } from '../types';
 import SwipeableItem from '../components/SwipeableItem';
+import { uploadImage } from '../lib/supabase';
 
 const MessagesPage: React.FC = () => {
-  const { chats, sendMessage, createChat, allUsers } = useApp();
+  const { chats, sendMessage, createChat, allUsers, getChatMessages, markMessagesAsRead } = useApp();
   const { user } = useAuth();
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messageText, setMessageText] = useState('');
@@ -16,46 +17,19 @@ const MessagesPage: React.FC = () => {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [chatName, setChatName] = useState('');
   const [isGroupChat, setIsGroupChat] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Load messages for selected chat
   useEffect(() => {
     if (selectedChat) {
       loadMessages(selectedChat.id);
+      markMessagesAsRead(selectedChat.id);
     }
   }, [selectedChat]);
 
   const loadMessages = async (chatId: string) => {
-    // Mock messages for demonstration
-    const mockMessages: Message[] = [
-      {
-        id: '1',
-        content: "Hey! How's your latest character development going?",
-        senderId: 'other-user',
-        chatId,
-        timestamp: new Date(Date.now() - 3600000),
-        isEncrypted: true,
-        readBy: ['other-user', user?.id || '']
-      },
-      {
-        id: '2',
-        content: "Great! Just finished writing a backstory for my new cyberpunk detective. Want to see?",
-        senderId: user?.id || '',
-        chatId,
-        timestamp: new Date(Date.now() - 3000000),
-        isEncrypted: true,
-        readBy: [user?.id || '']
-      },
-      {
-        id: '3',
-        content: "Absolutely! I love cyberpunk settings. What's their specialty?",
-        senderId: 'other-user',
-        chatId,
-        timestamp: new Date(Date.now() - 1800000),
-        isEncrypted: true,
-        readBy: ['other-user']
-      }
-    ];
-    setMessages(mockMessages);
+    const chatMessages = await getChatMessages(chatId);
+    setMessages(chatMessages);
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -104,22 +78,87 @@ const MessagesPage: React.FC = () => {
     // In a real app, this would delete the chat
   };
 
+  const handleFileUpload = async (file: File, type: 'image' | 'video') => {
+    if (!user || !selectedChat) return;
+
+    setUploading(true);
+    try {
+      const bucket = type === 'image' ? 'message-images' : 'message-videos';
+      const path = `${user.id}/${type}_${Date.now()}.${file.name.split('.').pop()}`;
+      
+      const mediaUrl = await uploadImage(file, bucket, path);
+      if (mediaUrl) {
+        await sendMessage(selectedChat.id, `Sent ${type === 'image' ? 'an image' : 'a video'}`, user.id, mediaUrl);
+        loadMessages(selectedChat.id);
+      } else {
+        alert('Failed to upload file');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleImageUpload = () => {
-    // Mock image upload
-    console.log('Image upload clicked');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) handleFileUpload(file, 'image');
+    };
+    input.click();
   };
 
   const handleVideoUpload = () => {
-    // Mock video upload
-    console.log('Video upload clicked');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) handleFileUpload(file, 'video');
+    };
+    input.click();
   };
 
   const filteredChats = chats.filter(chat =>
     chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    chat.participants.some(p => p.toLowerCase().includes(searchQuery.toLowerCase()))
+    chat.participants.some(p => {
+      const participant = allUsers.find(u => u.id === p);
+      return participant?.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+             participant?.username.toLowerCase().includes(searchQuery.toLowerCase());
+    })
   );
 
   const availableUsers = allUsers.filter(u => u.id !== user?.id);
+
+  const getChatDisplayName = (chat: Chat) => {
+    if (chat.name) return chat.name;
+    
+    const otherParticipants = chat.participants.filter(p => p !== user?.id);
+    if (otherParticipants.length === 1) {
+      const participant = allUsers.find(u => u.id === otherParticipants[0]);
+      return participant?.displayName || 'Unknown User';
+    }
+    
+    return `Group Chat (${chat.participants.length} members)`;
+  };
+
+  const getChatAvatar = (chat: Chat) => {
+    if (chat.isGroup) {
+      return 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
+    }
+    
+    const otherParticipants = chat.participants.filter(p => p !== user?.id);
+    if (otherParticipants.length === 1) {
+      const participant = allUsers.find(u => u.id === otherParticipants[0]);
+      return participant?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
+    }
+    
+    return 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
+  };
 
   return (
     <>
@@ -181,15 +220,11 @@ const MessagesPage: React.FC = () => {
                   >
                     <div className="flex items-center space-x-3">
                       <div className="relative">
-                        <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                          {chat.isGroup ? (
-                            <Users className="w-6 h-6 text-white" />
-                          ) : (
-                            <span className="text-white font-semibold">
-                              {chat.name?.[0] || 'U'}
-                            </span>
-                          )}
-                        </div>
+                        <img
+                          src={getChatAvatar(chat)}
+                          alt="Chat avatar"
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
                         {chat.isEncrypted && (
                           <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
                             <Lock className="w-2 h-2 text-white" />
@@ -198,12 +233,15 @@ const MessagesPage: React.FC = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-medium truncate">
-                          {chat.name || (chat.id ? `Chat ${chat.id.slice(0, 8)}` : 'Unnamed Chat')}
+                          {getChatDisplayName(chat)}
                         </p>
                         <p className="text-gray-400 text-sm truncate">
                           {chat.lastMessage?.content || 'No messages yet'}
                         </p>
                       </div>
+                      {chat.lastMessage && !chat.lastMessage.readBy.includes(user?.id || '') && (
+                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                      )}
                     </div>
                   </button>
                 </SwipeableItem>
@@ -220,18 +258,14 @@ const MessagesPage: React.FC = () => {
               <div className="p-4 border-b border-gray-700/50 bg-black/20">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                      {selectedChat.isGroup ? (
-                        <Users className="w-5 h-5 text-white" />
-                      ) : (
-                        <span className="text-white font-semibold">
-                          {selectedChat.name?.[0] || 'U'}
-                        </span>
-                      )}
-                    </div>
+                    <img
+                      src={getChatAvatar(selectedChat)}
+                      alt="Chat avatar"
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
                     <div>
                       <h3 className="text-white font-semibold">
-                        {selectedChat.name || (selectedChat.id ? `Chat ${selectedChat.id.slice(0, 8)}` : 'Unnamed Chat')}
+                        {getChatDisplayName(selectedChat)}
                       </h3>
                       <div className="flex items-center space-x-2">
                         {selectedChat.isEncrypted && (
@@ -261,6 +295,23 @@ const MessagesPage: React.FC = () => {
                         ? 'bg-purple-600 rounded-br-md' 
                         : 'bg-gray-800 rounded-bl-md'
                     }`}>
+                      {message.mediaUrl && (
+                        <div className="mb-2">
+                          {message.mediaUrl.includes('.mp4') || message.mediaUrl.includes('.mov') || message.mediaUrl.includes('.avi') ? (
+                            <video
+                              src={message.mediaUrl}
+                              className="w-full max-w-xs rounded-lg"
+                              controls
+                            />
+                          ) : (
+                            <img
+                              src={message.mediaUrl}
+                              alt="Shared media"
+                              className="w-full max-w-xs rounded-lg"
+                            />
+                          )}
+                        </div>
+                      )}
                       <p className="text-white text-sm">{message.content}</p>
                       <p className={`text-xs mt-1 ${
                         message.senderId === user?.id ? 'text-purple-200' : 'text-gray-400'
@@ -278,14 +329,16 @@ const MessagesPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleImageUpload}
-                    className="p-2 text-gray-400 hover:text-purple-400 transition-colors"
+                    disabled={uploading}
+                    className="p-2 text-gray-400 hover:text-purple-400 transition-colors disabled:opacity-50"
                   >
-                    <Image className="w-5 h-5" />
+                    {uploading ? <Upload className="w-5 h-5 animate-spin" /> : <Image className="w-5 h-5" />}
                   </button>
                   <button
                     type="button"
                     onClick={handleVideoUpload}
-                    className="p-2 text-gray-400 hover:text-purple-400 transition-colors"
+                    disabled={uploading}
+                    className="p-2 text-gray-400 hover:text-purple-400 transition-colors disabled:opacity-50"
                   >
                     <Video className="w-5 h-5" />
                   </button>
@@ -298,7 +351,7 @@ const MessagesPage: React.FC = () => {
                   />
                   <button
                     type="submit"
-                    disabled={!messageText.trim()}
+                    disabled={!messageText.trim() || uploading}
                     className="p-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-full transition-colors"
                   >
                     <Send className="w-5 h-5 text-white" />

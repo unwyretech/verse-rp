@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, encryptData, decryptData } from '../lib/supabase';
+import { supabase, encryptData, decryptData, uploadImage } from '../lib/supabase';
 import { Character, Post, Notification, Chat, Message, User } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -10,6 +10,7 @@ interface AppContextType {
   chats: Chat[];
   selectedCharacter: Character | null;
   unreadNotifications: number;
+  unreadMessages: number;
   allUsers: User[];
   bookmarkedPosts: string[];
   bookmarkedCharacters: string[];
@@ -51,6 +52,8 @@ interface AppContextType {
   unbookmarkPost: (postId: string) => void;
   unbookmarkCharacter: (characterId: string) => void;
   unbookmarkUser: (userId: string) => void;
+  getChatMessages: (chatId: string) => Promise<Message[]>;
+  markMessagesAsRead: (chatId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -76,6 +79,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [bookmarkedUsers, setBookmarkedUsers] = useState<string[]>([]);
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
+  const unreadMessages = chats.reduce((total, chat) => {
+    if (chat.lastMessage && !chat.lastMessage.readBy.includes(user?.id || '')) {
+      return total + 1;
+    }
+    return total;
+  }, 0);
 
   // Real-time subscriptions
   useEffect(() => {
@@ -118,11 +127,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .subscribe();
 
-    // Subscribe to post interactions
-    const interactionsSubscription = supabase
-      .channel('post_interactions')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_interactions' }, () => {
-        loadPosts();
+    // Subscribe to messages
+    const messagesSubscription = supabase
+      .channel('messages')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        loadChats();
+      })
+      .subscribe();
+
+    // Subscribe to chats
+    const chatsSubscription = supabase
+      .channel('chats')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
+        loadChats();
       })
       .subscribe();
 
@@ -131,6 +148,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .channel('follows')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => {
         loadAllUsers();
+        loadPosts(); // Refresh posts when follows change
       })
       .subscribe();
 
@@ -139,22 +157,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       charactersSubscription.unsubscribe();
       profilesSubscription.unsubscribe();
       notificationsSubscription.unsubscribe();
-      interactionsSubscription.unsubscribe();
+      messagesSubscription.unsubscribe();
+      chatsSubscription.unsubscribe();
       followsSubscription.unsubscribe();
     };
-  }, [user]);
-
-  // Auto-refresh every second
-  useEffect(() => {
-    if (!user) return;
-
-    const interval = setInterval(() => {
-      loadPosts();
-      loadCharacters();
-      loadAllUsers();
-    }, 1000);
-
-    return () => clearInterval(interval);
   }, [user]);
 
   // Load data when user changes
@@ -200,7 +206,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select(`
           *,
           follower_count:follows!follows_following_id_fkey(count),
-          following_count:follows!follows_follower_id_fkey(count)
+          following_count:follows!follows_follower_id_fkey(count),
+          is_followed:follows!follows_following_id_fkey!inner(follower_id)
         `)
         .order('created_at', { ascending: false });
 
@@ -210,8 +217,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: profile.id,
         username: profile.username,
         displayName: profile.display_name,
-        avatar: profile.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
-        headerImage: profile.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+        avatar: profile.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+        headerImage: profile.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=1500&h=500',
         bio: profile.bio || '',
         writersTag: profile.writers_tag,
         email: profile.email,
@@ -492,18 +499,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isEncrypted: chat.is_encrypted,
         lastMessage: chat.last_message?.[0] ? {
           id: chat.last_message[0].id,
-          content: decryptData(chat.last_message[0].content),
+          content: chat.last_message[0].is_encrypted ? decryptData(chat.last_message[0].content) : chat.last_message[0].content,
           senderId: chat.last_message[0].sender_id,
           chatId: chat.last_message[0].chat_id,
           timestamp: new Date(chat.last_message[0].created_at),
           isEncrypted: chat.last_message[0].is_encrypted,
-          readBy: []
+          readBy: chat.last_message[0].read_by || [],
+          mediaUrl: chat.last_message[0].media_url
         } : undefined
       }));
 
       setChats(formattedChats);
     } catch (error) {
       console.error('Error loading chats:', error);
+    }
+  };
+
+  const getChatMessages = async (chatId: string): Promise<Message[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          sender:profiles(*)
+        `)
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      return data.map(message => ({
+        id: message.id,
+        content: message.is_encrypted ? decryptData(message.content) : message.content,
+        senderId: message.sender_id,
+        chatId: message.chat_id,
+        timestamp: new Date(message.created_at),
+        isEncrypted: message.is_encrypted,
+        readBy: message.read_by || [],
+        mediaUrl: message.media_url
+      }));
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      return [];
+    }
+  };
+
+  const markMessagesAsRead = async (chatId: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ 
+          read_by: supabase.sql`array_append(read_by, ${user.id})`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('chat_id', chatId)
+        .not('read_by', 'cs', `{${user.id}}`);
+
+      if (error) throw error;
+      
+      loadChats(); // Refresh chats to update unread count
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
     }
   };
 
@@ -1016,7 +1074,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           sender_id: senderId,
           content: encryptedContent,
           is_encrypted: true,
-          media_url: mediaUrl
+          media_url: mediaUrl,
+          read_by: [senderId]
         })
         .select()
         .single();
@@ -1035,7 +1094,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         chatId: data.chat_id,
         timestamp: new Date(data.created_at),
         isEncrypted: data.is_encrypted,
-        readBy: [senderId]
+        readBy: [senderId],
+        mediaUrl: data.media_url
       };
 
       setChats(prev => prev.map(chat => 
@@ -1043,6 +1103,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? { ...chat, lastMessage: message }
           : chat
       ));
+
+      // Create notification for other participants
+      const chat = chats.find(c => c.id === chatId);
+      if (chat) {
+        const otherParticipants = chat.participants.filter(p => p !== senderId);
+        for (const participantId of otherParticipants) {
+          await addNotification({
+            type: 'message',
+            userId: participantId,
+            fromUserId: senderId,
+            message: `${user?.displayName} sent you a message`,
+            read: false
+          });
+        }
+      }
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -1146,14 +1221,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getFilteredPosts = (viewingAs?: Character | 'user') => {
     if (!user) return [];
 
+    // Get list of followed user IDs
+    const followedUserIds = new Set<string>();
+    
+    // Add users that the main account follows
+    allUsers.forEach(otherUser => {
+      // Check if current user follows this user
+      const isFollowing = supabase
+        .from('follows')
+        .select('id')
+        .eq('follower_id', user.id)
+        .eq('following_id', otherUser.id);
+      
+      // For now, use a simple check based on user data
+      // In a real implementation, this would be properly queried
+      if (user.following.includes(otherUser.id)) {
+        followedUserIds.add(otherUser.id);
+      }
+    });
+
     if (viewingAs === 'user') {
-      // Show posts from users the main account follows
+      // Show posts from users the main account follows + own posts
       return posts.filter(post => {
         if (post.userId === user.id) return true; // Own posts
-        return user.following.includes(post.userId);
+        return followedUserIds.has(post.userId);
       });
     } else if (viewingAs) {
-      // Show posts from accounts/characters this character follows
+      // Show posts from accounts/characters this character follows + own posts
       return posts.filter(post => {
         if (post.userId === user.id) return true; // Own posts
         if (post.characterId && viewingAs.following.includes(post.characterId)) return true;
@@ -1161,10 +1255,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // Default: show all posts from followed accounts
+    // Default: show all posts from followed accounts + own posts
     return posts.filter(post => {
       if (post.userId === user.id) return true;
-      return user.following.includes(post.userId);
+      return followedUserIds.has(post.userId);
     });
   };
 
@@ -1319,6 +1413,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       chats,
       selectedCharacter,
       unreadNotifications,
+      unreadMessages,
       allUsers,
       bookmarkedPosts,
       bookmarkedCharacters,
@@ -1359,7 +1454,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bookmarkUser,
       unbookmarkPost,
       unbookmarkCharacter,
-      unbookmarkUser
+      unbookmarkUser,
+      getChatMessages,
+      markMessagesAsRead
     }}>
       {children}
     </AppContext.Provider>

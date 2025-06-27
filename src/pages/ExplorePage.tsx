@@ -23,12 +23,25 @@ const ExplorePage: React.FC = () => {
   }>({ writers: [], characters: [] });
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedCharacter, setSelectedCharacter] = useState<any>(null);
+  const [followingStatus, setFollowingStatus] = useState<Record<string, boolean>>({});
 
   // Load recommendations on component mount
   useEffect(() => {
     const recs = getRecommendations();
     setRecommendations(recs);
   }, [getRecommendations]);
+
+  // Update following status when users change
+  useEffect(() => {
+    if (user) {
+      const status: Record<string, boolean> = {};
+      allUsers.forEach(otherUser => {
+        // Check if current user follows this user
+        status[otherUser.id] = user.following.includes(otherUser.id);
+      });
+      setFollowingStatus(status);
+    }
+  }, [user, allUsers]);
 
   // Handle search
   useEffect(() => {
@@ -68,12 +81,16 @@ const ExplorePage: React.FC = () => {
     repostPost(postId);
   };
 
-  const handleFollowUser = (userId: string) => {
-    followUser(userId);
+  const handleFollowUser = async (userId: string) => {
+    await followUser(userId);
+    setFollowingStatus(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
   };
 
   const isUserFollowing = (userId: string) => {
-    return user?.following.includes(userId) || false;
+    return followingStatus[userId] || false;
   };
 
   const handleUserClick = (clickedUser: any) => {
@@ -378,6 +395,13 @@ const ExplorePage: React.FC = () => {
               )}
             </div>
           )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 text-center border-t border-gray-700/50 bg-black/20">
+          <p className="text-gray-500 text-sm">
+            Verse © {new Date().getFullYear()} - UNWYRE TECH AND CONSULTING
+          </p>
         </div>
       </div>
 
