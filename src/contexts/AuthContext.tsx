@@ -30,36 +30,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
-    // Check for local test user first
-    const checkLocalUser = () => {
-      const localUser = localStorage.getItem('localTestUser');
-      if (localUser) {
-        try {
-          const user = JSON.parse(localUser);
-          setAuthState({
-            isAuthenticated: true,
-            user: {
-              ...user,
-              createdAt: new Date(user.createdAt)
-            },
-            loading: false
-          });
-          return true;
-        } catch (error) {
-          console.error('Error parsing local user:', error);
-          localStorage.removeItem('localTestUser');
-        }
-      }
-      return false;
-    };
-
     // Check for existing session
     const checkSession = async () => {
-      // First check for local test user
-      if (checkLocalUser()) {
-        return;
-      }
-
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
@@ -79,8 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'SIGNED_IN' && session?.user) {
         await loadUserProfile(session.user.id);
       } else if (event === 'SIGNED_OUT') {
-        // Clear local test user on sign out
-        localStorage.removeItem('localTestUser');
         setAuthState({
           isAuthenticated: false,
           user: null,
@@ -259,26 +229,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    // Clear local test user
-    localStorage.removeItem('localTestUser');
-    
     // Sign out from Supabase
     await supabase.auth.signOut();
   };
 
   const updateUser = async (updates: Partial<User>) => {
     if (!authState.user) return;
-
-    // Handle local test user updates
-    if (authState.user.id === 'local-test-user') {
-      const updatedUser = { ...authState.user, ...updates };
-      localStorage.setItem('localTestUser', JSON.stringify(updatedUser));
-      setAuthState(prev => ({
-        ...prev,
-        user: updatedUser
-      }));
-      return;
-    }
 
     try {
       const { error } = await supabase
