@@ -28,15 +28,9 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
     ...(user?.role === 'admin' ? [{ icon: Shield, label: 'Admin', path: '/admin' }] : [])
   ];
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      // Navigation will be handled by the auth state change in App.tsx
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Force navigation to login even if logout fails
-      navigate('/login', { replace: true });
-    }
+  const handleLogout = () => {
+    logout();
+    // Navigation will be handled by the auth state change in App.tsx
   };
 
   return (

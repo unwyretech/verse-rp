@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, encryptData, decryptData, hashData } from '../lib/supabase';
-import { SessionManager, SessionData } from '../lib/sessionManager';
+import { supabase } from '../lib/supabase';
+import { TokenManager, TokenData } from '../lib/tokenManager';
 import { User, AuthState } from '../types';
-import bcrypt from 'bcryptjs';
 
 interface AuthContextType extends AuthState {
   login: (identifier: string, password: string) => Promise<boolean>;
@@ -32,26 +31,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading: true
   });
 
-  // Session refresh interval
+  // Token refresh interval
   useEffect(() => {
     let refreshInterval: NodeJS.Timeout;
-    let cleanupInterval: NodeJS.Timeout;
 
     if (authState.isAuthenticated) {
-      // Check session every 5 minutes
+      // Check token every 5 minutes
       refreshInterval = setInterval(() => {
-        checkAndRefreshSession();
+        checkAndRefreshToken();
       }, 5 * 60 * 1000);
-
-      // Clean up expired sessions every hour
-      cleanupInterval = setInterval(() => {
-        SessionManager.cleanupExpiredSessions();
-      }, 60 * 60 * 1000);
     }
 
     return () => {
       if (refreshInterval) clearInterval(refreshInterval);
-      if (cleanupInterval) clearInterval(cleanupInterval);
     };
   }, [authState.isAuthenticated]);
 
@@ -60,39 +52,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initializeAuth = async () => {
       try {
-        // First, check for stored session
-        const storedSession = SessionManager.getStoredSession();
+        // Check for stored tokens
+        const storedTokens = TokenManager.getTokens();
         
-        if (storedSession) {
-          // Check if session is expired
-          if (SessionManager.isSessionExpired(storedSession.expiresAt)) {
-            console.log('Stored session expired, attempting refresh...');
-            const refreshedSession = await SessionManager.refreshSession(storedSession.refreshToken);
-            
-            if (refreshedSession) {
-              console.log('Session refreshed successfully');
-              await loadUserProfile(refreshedSession.userId);
-              return;
-            } else {
-              console.log('Session refresh failed, clearing session');
-              SessionManager.clearSession();
+        if (storedTokens) {
+          // Check if token is expired
+          if (TokenManager.isTokenExpired(storedTokens.expiresAt)) {
+            console.log('Stored token expired, clearing...');
+            TokenManager.clearTokens();
+            if (mounted) {
+              setAuthState({
+                isAuthenticated: false,
+                user: null,
+                loading: false
+              });
             }
-          } else {
-            // Validate session with database
-            const validation = await SessionManager.validateSession(storedSession.sessionToken);
-            
-            if (validation.isValid && validation.userId) {
-              console.log('Stored session is valid');
-              await loadUserProfile(validation.userId);
-              return;
-            } else {
-              console.log('Stored session is invalid, clearing session');
-              SessionManager.clearSession();
-            }
+            return;
           }
+
+          // Token is valid, load user profile
+          await loadUserProfile(storedTokens.userId);
+          return;
         }
 
-        // If no valid stored session, check Supabase session
+        // No stored tokens, check Supabase session
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
@@ -108,43 +91,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (session?.user && mounted) {
-          // Verify Supabase session is still valid
-          const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-          
-          if (userError || !currentUser) {
-            console.warn('Supabase session invalid, logging out');
-            await supabase.auth.signOut();
-            if (mounted) {
-              setAuthState({
-                isAuthenticated: false,
-                user: null,
-                loading: false
-              });
-            }
-            return;
-          }
-
-          // Create new session in our system
-          const { sessionToken, refreshToken } = SessionManager.generateTokens();
-          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-          const sessionCreated = await SessionManager.createSession(
-            session.user.id,
-            sessionToken,
-            refreshToken,
-            expiresAt
-          );
-
-          if (sessionCreated) {
-            const sessionData: SessionData = {
-              sessionToken,
-              refreshToken,
-              expiresAt,
-              userId: session.user.id
-            };
-            SessionManager.storeSession(sessionData);
-          }
-
+          // Create new tokens for Supabase session
+          const tokenData = TokenManager.generateTokens(session.user.id);
+          TokenManager.storeTokens(tokenData);
           await loadUserProfile(session.user.id);
         } else if (mounted) {
           setAuthState({
@@ -156,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         console.error('Auth initialization failed:', error);
         if (mounted) {
-          SessionManager.clearSession();
+          TokenManager.clearTokens();
           await supabase.auth.signOut();
           setAuthState({
             isAuthenticated: false,
@@ -175,49 +124,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         if (event === 'SIGNED_IN' && session?.user) {
-          // Create new session in our system
-          const { sessionToken, refreshToken } = SessionManager.generateTokens();
-          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-          const sessionCreated = await SessionManager.createSession(
-            session.user.id,
-            sessionToken,
-            refreshToken,
-            expiresAt
-          );
-
-          if (sessionCreated) {
-            const sessionData: SessionData = {
-              sessionToken,
-              refreshToken,
-              expiresAt,
-              userId: session.user.id
-            };
-            SessionManager.storeSession(sessionData);
-          }
-
+          // Create new tokens
+          const tokenData = TokenManager.generateTokens(session.user.id);
+          TokenManager.storeTokens(tokenData);
           await loadUserProfile(session.user.id);
         } else if (event === 'SIGNED_OUT') {
-          const storedSession = SessionManager.getStoredSession();
-          if (storedSession) {
-            await SessionManager.invalidateSession(storedSession.sessionToken);
-          }
-          SessionManager.clearSession();
+          TokenManager.clearTokens();
           setAuthState({
             isAuthenticated: false,
             user: null,
             loading: false
           });
-        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          // Supabase token refreshed, but we manage our own sessions
-          const storedSession = SessionManager.getStoredSession();
-          if (storedSession && SessionManager.needsRefresh(storedSession.expiresAt)) {
-            await checkAndRefreshSession();
-          }
         }
       } catch (error) {
         console.error('Auth state change error:', error);
-        SessionManager.clearSession();
+        TokenManager.clearTokens();
         setAuthState({
           isAuthenticated: false,
           user: null,
@@ -232,29 +153,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const checkAndRefreshSession = async () => {
-    const storedSession = SessionManager.getStoredSession();
+  const checkAndRefreshToken = async () => {
+    const storedTokens = TokenManager.getTokens();
     
-    if (!storedSession) {
-      console.log('No stored session found');
+    if (!storedTokens) {
+      console.log('No stored tokens found');
       await logout();
       return;
     }
 
-    if (SessionManager.isSessionExpired(storedSession.expiresAt)) {
-      console.log('Session expired, attempting refresh...');
-      const refreshedSession = await SessionManager.refreshSession(storedSession.refreshToken);
-      
-      if (!refreshedSession) {
-        console.log('Session refresh failed, logging out');
-        await logout();
-        return;
-      }
-      
-      console.log('Session refreshed successfully');
-    } else if (SessionManager.needsRefresh(storedSession.expiresAt)) {
-      console.log('Session needs refresh, refreshing...');
-      await SessionManager.refreshSession(storedSession.refreshToken);
+    if (TokenManager.isTokenExpired(storedTokens.expiresAt)) {
+      console.log('Token expired, logging out');
+      await logout();
+      return;
+    }
+
+    if (TokenManager.needsRefresh(storedTokens.expiresAt)) {
+      console.log('Token needs refresh, generating new tokens');
+      const newTokenData = TokenManager.generateTokens(storedTokens.userId);
+      TokenManager.storeTokens(newTokenData);
     }
   };
 
@@ -272,7 +189,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Profile load error:', error);
-        SessionManager.clearSession();
+        TokenManager.clearTokens();
         await supabase.auth.signOut();
         setAuthState({
           isAuthenticated: false,
@@ -317,7 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch (error) {
       console.error('Error loading user profile:', error);
-      SessionManager.clearSession();
+      TokenManager.clearTokens();
       await supabase.auth.signOut();
       setAuthState({
         isAuthenticated: false,
@@ -328,7 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshSession = async () => {
-    await checkAndRefreshSession();
+    await checkAndRefreshToken();
   };
 
   const login = async (identifier: string, password: string): Promise<boolean> => {
@@ -374,7 +291,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(error.message || 'Login failed');
       }
 
-      // Session creation will be handled by the auth state change listener
+      if (data.user) {
+        // Generate and store tokens
+        const tokenData = TokenManager.generateTokens(data.user.id);
+        TokenManager.storeTokens(tokenData);
+      }
+
       return true;
     } catch (error) {
       console.error('Login error:', error);
@@ -441,6 +363,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
         if (privacyError) console.warn('Privacy settings creation failed:', privacyError);
+
+        // Generate and store tokens
+        const tokenData = TokenManager.generateTokens(data.user.id);
+        TokenManager.storeTokens(tokenData);
       }
 
       return true;
@@ -453,30 +379,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      // Set loading state immediately to prevent UI issues
-      setAuthState(prev => ({ ...prev, loading: true }));
+      // Clear tokens immediately
+      TokenManager.clearTokens();
       
-      // Invalidate session in our system
-      const storedSession = SessionManager.getStoredSession();
-      if (storedSession) {
-        try {
-          await SessionManager.invalidateSession(storedSession.sessionToken);
-        } catch (error) {
-          console.warn('Failed to invalidate session in database:', error);
-        }
-      }
-      
-      // Clear session data
-      SessionManager.clearSession();
-      
-      // Sign out from Supabase
-      try {
-        await supabase.auth.signOut();
-      } catch (error) {
+      // Sign out from Supabase (don't wait for it)
+      supabase.auth.signOut().catch(error => {
         console.warn('Supabase signout error:', error);
-      }
+      });
       
-      // Set final auth state
+      // Set auth state immediately
       setAuthState({
         isAuthenticated: false,
         user: null,
@@ -485,7 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Logout error:', error);
       // Even if logout fails, clear the state
-      SessionManager.clearSession();
+      TokenManager.clearTokens();
       setAuthState({
         isAuthenticated: false,
         user: null,
@@ -550,27 +461,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(error.message || 'Failed to change password');
       }
 
-      // Invalidate all other sessions for security
+      // Generate new tokens for security
       if (authState.user) {
-        await SessionManager.invalidateAllUserSessions(authState.user.id);
-        
-        // Create new session for current user
-        const { sessionToken, refreshToken } = SessionManager.generateTokens();
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-        await SessionManager.createSession(
-          authState.user.id,
-          sessionToken,
-          refreshToken,
-          expiresAt
-        );
-
-        SessionManager.storeSession({
-          sessionToken,
-          refreshToken,
-          expiresAt,
-          userId: authState.user.id
-        });
+        const tokenData = TokenManager.generateTokens(authState.user.id);
+        TokenManager.storeTokens(tokenData);
       }
 
       return true;
