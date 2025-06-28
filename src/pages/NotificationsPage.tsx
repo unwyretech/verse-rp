@@ -1,11 +1,15 @@
 import React from 'react';
 import { Bell, Heart, Repeat2, MessageCircle, UserPlus, AtSign, X, Archive, Check } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Notification } from '../types';
 import SwipeableItem from '../components/SwipeableItem';
+import { useNavigate } from 'react-router-dom';
 
 const NotificationsPage: React.FC = () => {
-  const { notifications, markNotificationAsRead, clearAllNotifications } = useApp();
+  const { notifications, markNotificationAsRead, clearAllNotifications, posts, allUsers } = useApp();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
@@ -28,6 +32,34 @@ const NotificationsPage: React.FC = () => {
       case 'mention': return 'mentioned you in a post';
       case 'message': return 'sent you a message';
       default: return 'interacted with your content';
+    }
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    markNotificationAsRead(notification.id);
+
+    // Navigate based on notification type
+    switch (notification.type) {
+      case 'like':
+      case 'repost':
+      case 'comment':
+      case 'mention':
+        if (notification.postId) {
+          // Find the post and navigate to it (for now, just go to home)
+          navigate('/');
+        }
+        break;
+      case 'follow':
+        if (notification.fromUserId) {
+          // Navigate to the follower's profile
+          navigate('/explore'); // In a real app, this would be a specific profile route
+        }
+        break;
+      case 'message':
+        navigate('/messages');
+        break;
+      default:
+        break;
     }
   };
 
@@ -90,7 +122,7 @@ const NotificationsPage: React.FC = () => {
               }}
             >
               <div
-                onClick={() => handleMarkAsRead(notification.id)}
+                onClick={() => handleNotificationClick(notification)}
                 className={`p-6 hover:bg-gray-800/20 transition-colors cursor-pointer ${
                   !notification.read ? 'bg-purple-900/10 border-l-4 border-purple-500' : ''
                 }`}

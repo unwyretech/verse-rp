@@ -28,6 +28,8 @@ interface AppContextType {
   deletePost: (id: string) => void;
   likePost: (postId: string) => void;
   repostPost: (postId: string) => void;
+  pinPost: (postId: string) => void;
+  unpinPost: (postId: string) => void;
   addComment: (postId: string, content: string, characterId?: string) => void;
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   markNotificationAsRead: (id: string) => void;
@@ -157,7 +159,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       charactersSubscription.unsubscribe();
       profilesSubscription.unsubscribe();
       notificationsSubscription.unsubscribe();
-      messagesSubscription.unsubscribe();
+      messages Subscription.unsubscribe();
       chatsSubscription.unsubscribe();
       followsSubscription.unsubscribe();
     };
@@ -354,6 +356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           comments: post.comments?.length || 0,
           isLiked,
           isReposted,
+          isPinned: post.is_pinned || false,
           isThread: post.is_thread,
           threadId: post.thread_id,
           parentPostId: post.parent_post_id,
@@ -750,6 +753,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           visibility: updates.visibility,
           tags: updates.tags,
           media_urls: updates.mediaUrls,
+          is_pinned: updates.isPinned,
           updated_at: new Date().toISOString()
         })
         .eq('id', id);
@@ -774,6 +778,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPosts(prev => prev.filter(post => post.id !== id));
     } catch (error) {
       console.error('Error deleting post:', error);
+    }
+  };
+
+  const pinPost = async (postId: string) => {
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({ is_pinned: true })
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      setPosts(prev => prev.map(post => 
+        post.id === postId ? { ...post, isPinned: true } : post
+      ));
+    } catch (error) {
+      console.error('Error pinning post:', error);
+    }
+  };
+
+  const unpinPost = async (postId: string) => {
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({ is_pinned: false })
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      setPosts(prev => prev.map(post => 
+        post.id === postId ? { ...post, isPinned: false } : post
+      ));
+    } catch (error) {
+      console.error('Error unpinning post:', error);
     }
   };
 
@@ -1431,6 +1469,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deletePost,
       likePost,
       repostPost,
+      pinPost,
+      unpinPost,
       addComment,
       addNotification,
       markNotificationAsRead,

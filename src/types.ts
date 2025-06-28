@@ -54,6 +54,7 @@ export interface Post {
   comments: number;
   isLiked: boolean;
   isReposted: boolean;
+  isPinned?: boolean;
   isThread: boolean;
   threadId?: string;
   parentPostId?: string;

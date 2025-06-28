@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video, Upload } from 'lucide-react';
+import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video, Upload, X, ArrowLeft } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Chat, Message } from '../types';
@@ -18,6 +18,18 @@ const MessagesPage: React.FC = () => {
   const [chatName, setChatName] = useState('');
   const [isGroupChat, setIsGroupChat] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Load messages for selected chat
   useEffect(() => {
@@ -74,8 +86,13 @@ const MessagesPage: React.FC = () => {
   };
 
   const handleDeleteChat = (chatId: string) => {
+    setShowDeleteConfirm(chatId);
+  };
+
+  const confirmDeleteChat = (chatId: string) => {
     console.log('Delete chat:', chatId);
     // In a real app, this would delete the chat
+    setShowDeleteConfirm(null);
   };
 
   const handleFileUpload = async (file: File, type: 'image' | 'video') => {
@@ -162,9 +179,9 @@ const MessagesPage: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-black/10 backdrop-blur-sm flex">
+      <div className="min-h-screen bg-black/10 backdrop-blur-sm flex relative">
         {/* Chat List */}
-        <div className="w-80 border-r border-gray-700/50 bg-black/20">
+        <div className={`${isMobile ? (selectedChat ? 'hidden' : 'w-full') : 'w-80'} border-r border-gray-700/50 bg-black/20 ${isMobile ? 'absolute inset-0 z-10' : ''}`}>
           <div className="p-4 border-b border-gray-700/50">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-white">Messages</h2>
@@ -251,13 +268,21 @@ const MessagesPage: React.FC = () => {
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col ${isMobile && selectedChat ? 'absolute inset-0 z-20 bg-gray-900' : ''}`}>
           {selectedChat ? (
             <>
               {/* Chat Header */}
               <div className="p-4 border-b border-gray-700/50 bg-black/20">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
+                    {isMobile && (
+                      <button
+                        onClick={() => setSelectedChat(null)}
+                        className="p-2 text-gray-400 hover:text-white transition-colors"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                      </button>
+                    )}
                     <img
                       src={getChatAvatar(selectedChat)}
                       alt="Chat avatar"
@@ -371,12 +396,44 @@ const MessagesPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-900 rounded-2xl border border-gray-700/50 p-6 mx-4 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-white mb-4">Delete Conversation</h3>
+            <p className="text-gray-300 mb-6">Are you sure you want to delete this conversation? This action cannot be undone.</p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => confirmDeleteChat(showDeleteConfirm)}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* New Chat Modal */}
       {showNewChat && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-gray-900 rounded-2xl border border-gray-700/50 w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto">
             <div className="p-6">
-              <h3 className="text-lg font-bold text-white mb-4">Start New Conversation</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">Start New Conversation</h3>
+                <button
+                  onClick={() => setShowNewChat(false)}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
               
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">

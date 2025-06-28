@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, Edit3, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, Edit3, Trash2, ChevronDown, ChevronUp, Bookmark, Pin, PinOff } from 'lucide-react';
 import { Post } from '../types';
 import { formatDistanceToNow } from '../utils/dateUtils';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,10 +9,23 @@ interface PostCardProps {
   post: Post;
   onLike: () => void;
   onRepost: () => void;
+  onBookmark?: () => void;
+  isBookmarked?: boolean;
   showReplies?: boolean;
+  showPinOption?: boolean;
+  onPin?: () => void;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost, showReplies = false }) => {
+const PostCard: React.FC<PostCardProps> = ({ 
+  post, 
+  onLike, 
+  onRepost, 
+  onBookmark,
+  isBookmarked = false,
+  showReplies = false,
+  showPinOption = false,
+  onPin
+}) => {
   const { user } = useAuth();
   const { updatePost, deletePost, addComment, characters } = useApp();
   const [showMenu, setShowMenu] = useState(false);
@@ -62,6 +75,13 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost, showReplies
     }
   };
 
+  const handlePin = () => {
+    if (onPin) {
+      onPin();
+    }
+    setShowMenu(false);
+  };
+
   return (
     <article className="bg-gray-800/30 rounded-xl border border-gray-700/50 overflow-hidden">
       <div className="p-6 hover:bg-gray-800/20 transition-colors">
@@ -96,8 +116,29 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost, showReplies
                 </button>
                 {showMenu && (
                   <div className="absolute right-0 top-8 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-10 min-w-[120px]">
+                    {onBookmark && (
+                      <button
+                        onClick={() => {
+                          onBookmark();
+                          setShowMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-white hover:bg-gray-700 flex items-center space-x-2"
+                      >
+                        <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
+                        <span>{isBookmarked ? 'Remove Bookmark' : 'Bookmark'}</span>
+                      </button>
+                    )}
                     {isOwnPost && (
                       <>
+                        {showPinOption && (
+                          <button
+                            onClick={handlePin}
+                            className="w-full text-left px-4 py-2 text-white hover:bg-gray-700 flex items-center space-x-2"
+                          >
+                            {post.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+                            <span>{post.isPinned ? 'Unpin' : 'Pin to Profile'}</span>
+                          </button>
+                        )}
                         <button
                           onClick={handleEdit}
                           className="w-full text-left px-4 py-2 text-white hover:bg-gray-700 flex items-center space-x-2"
@@ -223,6 +264,19 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onRepost, showReplies
                 </div>
                 <span className="text-sm">{post.likes}</span>
               </button>
+
+              {onBookmark && (
+                <button 
+                  onClick={onBookmark}
+                  className={`flex items-center space-x-2 transition-colors group ${
+                    isBookmarked ? 'text-purple-400' : 'text-gray-500 hover:text-purple-400'
+                  }`}
+                >
+                  <div className="p-2 rounded-full group-hover:bg-purple-400/10 transition-colors">
+                    <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />
+                  </div>
+                </button>
+              )}
 
               <button className="flex items-center space-x-2 text-gray-500 hover:text-blue-400 transition-colors group">
                 <div className="p-2 rounded-full group-hover:bg-blue-400/10 transition-colors">

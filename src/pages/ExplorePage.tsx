@@ -23,25 +23,12 @@ const ExplorePage: React.FC = () => {
   }>({ writers: [], characters: [] });
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedCharacter, setSelectedCharacter] = useState<any>(null);
-  const [followingStatus, setFollowingStatus] = useState<Record<string, boolean>>({});
 
   // Load recommendations on component mount
   useEffect(() => {
     const recs = getRecommendations();
     setRecommendations(recs);
   }, [getRecommendations]);
-
-  // Update following status when users change
-  useEffect(() => {
-    if (user) {
-      const status: Record<string, boolean> = {};
-      allUsers.forEach(otherUser => {
-        // Check if current user follows this user
-        status[otherUser.id] = user.following.includes(otherUser.id);
-      });
-      setFollowingStatus(status);
-    }
-  }, [user, allUsers]);
 
   // Handle search
   useEffect(() => {
@@ -83,14 +70,10 @@ const ExplorePage: React.FC = () => {
 
   const handleFollowUser = async (userId: string) => {
     await followUser(userId);
-    setFollowingStatus(prev => ({
-      ...prev,
-      [userId]: !prev[userId]
-    }));
   };
 
   const isUserFollowing = (userId: string) => {
-    return followingStatus[userId] || false;
+    return user?.following.includes(userId) || false;
   };
 
   const handleUserClick = (clickedUser: any) => {
@@ -247,44 +230,71 @@ const ExplorePage: React.FC = () => {
                 <div 
                   key={writer.id} 
                   onClick={() => handleUserClick(writer)}
-                  className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer"
+                  className="bg-gray-800/50 rounded-2xl border border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer overflow-hidden"
                 >
-                  <div className="flex items-center space-x-4 mb-4">
+                  {/* Header Image */}
+                  <div className="h-32 relative">
                     <img
-                      src={writer.avatar}
-                      alt={writer.displayName}
-                      className="w-16 h-16 rounded-full object-cover ring-2 ring-purple-500/30"
+                      src={writer.headerImage}
+                      alt={`${writer.displayName} header`}
+                      className="w-full h-full object-cover"
+                      style={{ width: '1500px', height: '500px', objectFit: 'cover' }}
                     />
-                    <div className="flex-1">
-                      <h3 className="text-white font-bold text-lg">{writer.displayName}</h3>
-                      <p className="text-gray-400">@{writer.username}</p>
-                      <p className="text-purple-300 text-sm">#{writer.writersTag}</p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleFollowUser(writer.id);
-                      }}
-                      className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                        isUserFollowing(writer.id)
-                          ? 'bg-gray-600 text-white hover:bg-gray-700'
-                          : 'bg-purple-600 text-white hover:bg-purple-700'
-                      }`}
-                    >
-                      {isUserFollowing(writer.id) ? (
-                        <>
-                          <UserMinus className="w-3 h-3" />
-                          <span>Unfollow</span>
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="w-3 h-3" />
-                          <span>Follow</span>
-                        </>
-                      )}
-                    </button>
                   </div>
-                  <p className="text-gray-300 text-sm">{writer.bio}</p>
+
+                  <div className="p-6">
+                    <div className="flex items-center space-x-4 -mt-16 mb-4 relative z-10">
+                      <img
+                        src={writer.avatar}
+                        alt={writer.displayName}
+                        className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-800 bg-gray-800"
+                        style={{ width: '350px', height: '350px', objectFit: 'cover' }}
+                      />
+                      <div className="flex items-center space-x-2 mt-8">
+                        <span className="text-purple-300 text-sm">#{writer.writersTag}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-white font-bold text-lg">{writer.displayName}</h3>
+                        <p className="text-gray-400 text-sm">@{writer.username}</p>
+                      </div>
+
+                      <p className="text-gray-300 text-sm line-clamp-3">{writer.bio}</p>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
+                        <div className="flex items-center space-x-4 text-gray-400 text-sm">
+                          <span>{writer.followers.length} followers</span>
+                          <span>{writer.following.length} following</span>
+                        </div>
+                        
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFollowUser(writer.id);
+                          }}
+                          className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                            isUserFollowing(writer.id)
+                              ? 'bg-gray-600 text-white hover:bg-gray-700'
+                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                          }`}
+                        >
+                          {isUserFollowing(writer.id) ? (
+                            <>
+                              <UserMinus className="w-3 h-3" />
+                              <span>Unfollow</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-3 h-3" />
+                              <span>Follow</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )) : (
                 <div className="col-span-full text-center py-12">
@@ -341,44 +351,69 @@ const ExplorePage: React.FC = () => {
                       <div 
                         key={writer.id} 
                         onClick={() => handleUserClick(writer)}
-                        className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer"
+                        className="bg-gray-800/50 rounded-2xl border border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer overflow-hidden"
                       >
-                        <div className="flex items-center space-x-4 mb-4">
+                        {/* Header Image */}
+                        <div className="h-32 relative">
                           <img
-                            src={writer.avatar}
-                            alt={writer.displayName}
-                            className="w-16 h-16 rounded-full object-cover ring-2 ring-purple-500/30"
+                            src={writer.headerImage}
+                            alt={`${writer.displayName} header`}
+                            className="w-full h-full object-cover"
                           />
-                          <div className="flex-1">
-                            <h3 className="text-white font-bold text-lg">{writer.displayName}</h3>
-                            <p className="text-gray-400">@{writer.username}</p>
-                            <p className="text-purple-300 text-sm">#{writer.writersTag}</p>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleFollowUser(writer.id);
-                            }}
-                            className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                              isUserFollowing(writer.id)
-                                ? 'bg-gray-600 text-white hover:bg-gray-700'
-                                : 'bg-purple-600 text-white hover:bg-purple-700'
-                            }`}
-                          >
-                            {isUserFollowing(writer.id) ? (
-                              <>
-                                <UserMinus className="w-3 h-3" />
-                                <span>Unfollow</span>
-                              </>
-                            ) : (
-                              <>
-                                <UserPlus className="w-3 h-3" />
-                                <span>Follow</span>
-                              </>
-                            )}
-                          </button>
                         </div>
-                        <p className="text-gray-300 text-sm">{writer.bio}</p>
+
+                        <div className="p-6">
+                          <div className="flex items-center space-x-4 -mt-16 mb-4 relative z-10">
+                            <img
+                              src={writer.avatar}
+                              alt={writer.displayName}
+                              className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-800 bg-gray-800"
+                            />
+                            <div className="flex items-center space-x-2 mt-8">
+                              <span className="text-purple-300 text-sm">#{writer.writersTag}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div>
+                              <h3 className="text-white font-bold text-lg">{writer.displayName}</h3>
+                              <p className="text-gray-400 text-sm">@{writer.username}</p>
+                            </div>
+
+                            <p className="text-gray-300 text-sm line-clamp-3">{writer.bio}</p>
+
+                            <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
+                              <div className="flex items-center space-x-4 text-gray-400 text-sm">
+                                <span>{writer.followers.length} followers</span>
+                                <span>{writer.following.length} following</span>
+                              </div>
+                              
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleFollowUser(writer.id);
+                                }}
+                                className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                                  isUserFollowing(writer.id)
+                                    ? 'bg-gray-600 text-white hover:bg-gray-700'
+                                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                                }`}
+                              >
+                                {isUserFollowing(writer.id) ? (
+                                  <>
+                                    <UserMinus className="w-3 h-3" />
+                                    <span>Unfollow</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserPlus className="w-3 h-3" />
+                                    <span>Follow</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -400,7 +435,7 @@ const ExplorePage: React.FC = () => {
         {/* Footer */}
         <div className="p-6 text-center border-t border-gray-700/50 bg-black/20">
           <p className="text-gray-500 text-sm">
-            Verse © {new Date().getFullYear()} - UNWYRE TECH AND CONSULTING
+            Verse © {new Date().getFullYear()}
           </p>
         </div>
       </div>

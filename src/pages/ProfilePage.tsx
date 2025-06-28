@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Edit3, Plus, Settings, MapPin, Calendar, Link as LinkIcon } from 'lucide-react';
+import { Camera, Edit3, Plus, Settings, MapPin, Calendar, Link as LinkIcon, Pin, PinOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 import { User } from '../types';
 import CharacterCard from '../components/CharacterCard';
 import CreateCharacter from '../components/CreateCharacter';
 import EditProfile from '../components/EditProfile';
+import PostCard from '../components/PostCard';
 
 const ProfilePage: React.FC = () => {
   const { user, updateUser } = useAuth();
-  const { characters, posts, getUserFollowers, getUserFollowing } = useApp();
+  const { characters, posts, getUserFollowers, getUserFollowing, likePost, repostPost, pinPost, unpinPost } = useApp();
   const [activeTab, setActiveTab] = useState<'posts' | 'characters' | 'followers' | 'following'>('posts');
   const [showCreateCharacter, setShowCreateCharacter] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -18,6 +19,13 @@ const ProfilePage: React.FC = () => {
 
   const userPosts = posts.filter(post => post.userId === user?.id);
   const userCharacters = characters.filter(char => char.userId === user?.id);
+
+  // Sort posts with pinned posts first
+  const sortedUserPosts = userPosts.sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return b.timestamp.getTime() - a.timestamp.getTime();
+  });
 
   useEffect(() => {
     if (user) {
@@ -43,6 +51,23 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleLike = (postId: string) => {
+    likePost(postId);
+  };
+
+  const handleRepost = (postId: string) => {
+    repostPost(postId);
+  };
+
+  const handlePinPost = (postId: string) => {
+    const post = userPosts.find(p => p.id === postId);
+    if (post?.isPinned) {
+      unpinPost(postId);
+    } else {
+      pinPost(postId);
+    }
+  };
+
   if (!user) return null;
 
   return (
@@ -54,6 +79,7 @@ const ProfilePage: React.FC = () => {
             src={user.headerImage}
             alt="Profile header"
             className="w-full h-full object-cover"
+            style={{ width: '1500px', height: '500px', objectFit: 'cover' }}
           />
           <button className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors">
             <Camera className="w-5 h-5 text-white" />
@@ -67,6 +93,7 @@ const ProfilePage: React.FC = () => {
                 src={user.avatar}
                 alt={user.displayName}
                 className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-900 bg-gray-900"
+                style={{ width: '350px', height: '350px', objectFit: 'cover' }}
               />
               <button className="absolute bottom-2 right-2 p-2 bg-purple-600 hover:bg-purple-700 rounded-full transition-colors">
                 <Camera className="w-4 h-4 text-white" />
@@ -157,7 +184,7 @@ const ProfilePage: React.FC = () => {
       <div className="p-6">
         {activeTab === 'posts' && (
           <div className="space-y-4">
-            {userPosts.length === 0 ? (
+            {sortedUserPosts.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-gray-400 mb-4">No posts yet</p>
                 <button className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-full transition-colors">
@@ -165,16 +192,21 @@ const ProfilePage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              userPosts.map(post => (
-                <div key={post.id} className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                  <p className="text-white">{post.content}</p>
-                  <div className="flex items-center justify-between mt-3 text-gray-400 text-sm">
-                    <span>{post.timestamp.toLocaleDateString()}</span>
-                    <div className="flex space-x-4">
-                      <span>{post.likes} likes</span>
-                      <span>{post.reposts} reposts</span>
+              sortedUserPosts.map(post => (
+                <div key={post.id} className="relative">
+                  {post.isPinned && (
+                    <div className="flex items-center space-x-2 text-purple-400 text-sm mb-2">
+                      <Pin className="w-4 h-4" />
+                      <span>Pinned Post</span>
                     </div>
-                  </div>
+                  )}
+                  <PostCard
+                    post={post}
+                    onLike={() => handleLike(post.id)}
+                    onRepost={() => handleRepost(post.id)}
+                    showPinOption={true}
+                    onPin={() => handlePinPost(post.id)}
+                  />
                 </div>
               ))
             )}

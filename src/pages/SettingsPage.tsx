@@ -54,9 +54,9 @@ const SettingsPage: React.FC = () => {
         <p className="text-gray-400 text-sm">Manage your account and privacy preferences</p>
       </div>
 
-      <div className="flex">
+      <div className="flex flex-col lg:flex-row min-h-0">
         {/* Settings Navigation */}
-        <div className="w-64 border-r border-gray-700/50 bg-black/20 p-4">
+        <div className="w-full lg:w-64 border-b lg:border-r lg:border-b-0 border-gray-700/50 bg-black/20 p-4">
           <nav className="space-y-2">
             {sections.map(section => (
               <button
@@ -76,9 +76,9 @@ const SettingsPage: React.FC = () => {
         </div>
 
         {/* Settings Content */}
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-4 lg:p-6 overflow-y-auto">
           {activeSection === 'privacy' && (
-            <div className="space-y-6">
+            <div className="space-y-6 max-w-2xl">
               <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50">
                 <h3 className="text-lg font-bold text-white mb-4 flex items-center space-x-2">
                   <Eye className="w-5 h-5 text-purple-400" />
@@ -90,14 +90,14 @@ const SettingsPage: React.FC = () => {
                     { value: 'followers', label: 'Followers Only', desc: 'Only your followers can see your profile' },
                     { value: 'private', label: 'Private', desc: 'Only you can see your profile' }
                   ].map(option => (
-                    <label key={option.value} className="flex items-center space-x-3 cursor-pointer">
+                    <label key={option.value} className="flex items-start space-x-3 cursor-pointer">
                       <input
                         type="radio"
                         name="profileVisibility"
                         value={option.value}
                         checked={user?.privacySettings.profileVisibility === option.value}
                         onChange={(e) => handlePrivacyUpdate('profileVisibility', e.target.value)}
-                        className="text-purple-600 focus:ring-purple-500"
+                        className="text-purple-600 focus:ring-purple-500 mt-1"
                       />
                       <div>
                         <p className="text-white font-medium">{option.label}</p>
@@ -116,14 +116,14 @@ const SettingsPage: React.FC = () => {
                     { value: 'followers', label: 'Followers Only', desc: 'Only your followers can message you' },
                     { value: 'none', label: 'No One', desc: 'Disable direct messages' }
                   ].map(option => (
-                    <label key={option.value} className="flex items-center space-x-3 cursor-pointer">
+                    <label key={option.value} className="flex items-start space-x-3 cursor-pointer">
                       <input
                         type="radio"
                         name="messagePermissions"
                         value={option.value}
                         checked={user?.privacySettings.messagePermissions === option.value}
                         onChange={(e) => handlePrivacyUpdate('messagePermissions', e.target.value)}
-                        className="text-purple-600 focus:ring-purple-500"
+                        className="text-purple-600 focus:ring-purple-500 mt-1"
                       />
                       <div>
                         <p className="text-white font-medium">{option.label}</p>
@@ -137,7 +137,7 @@ const SettingsPage: React.FC = () => {
           )}
 
           {activeSection === 'account' && (
-            <div className="space-y-6">
+            <div className="space-y-6 max-w-2xl">
               <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50">
                 <h3 className="text-lg font-bold text-white mb-4">Account Information</h3>
                 <div className="space-y-4">
@@ -184,7 +184,7 @@ const SettingsPage: React.FC = () => {
           )}
 
           {activeSection === 'security' && (
-            <div className="space-y-6">
+            <div className="space-y-6 max-w-2xl">
               <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50">
                 <h3 className="text-lg font-bold text-white mb-4 flex items-center space-x-2">
                   <Key className="w-5 h-5 text-purple-400" />
@@ -268,7 +268,7 @@ const SettingsPage: React.FC = () => {
           )}
 
           {activeSection === 'notifications' && (
-            <div className="space-y-6">
+            <div className="space-y-6 max-w-2xl">
               <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50">
                 <h3 className="text-lg font-bold text-white mb-4">Notification Preferences</h3>
                 <div className="space-y-4">

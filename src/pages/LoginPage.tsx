@@ -190,7 +190,7 @@ const LoginPage: React.FC = () => {
       {/* Footer */}
       <div className="p-6 text-center border-t border-gray-700/50 bg-black/20">
         <p className="text-gray-500 text-sm">
-          Verse © {new Date().getFullYear()} - UNWYRE TECH AND CONSULTING
+          Verse © {new Date().getFullYear()}
         </p>
       </div>
     </div>
