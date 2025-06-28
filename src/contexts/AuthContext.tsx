@@ -453,22 +453,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      // Set loading state immediately to prevent UI issues
       setAuthState(prev => ({ ...prev, loading: true }));
       
       // Invalidate session in our system
       const storedSession = SessionManager.getStoredSession();
       if (storedSession) {
-        await SessionManager.invalidateSession(storedSession.sessionToken);
+        try {
+          await SessionManager.invalidateSession(storedSession.sessionToken);
+        } catch (error) {
+          console.warn('Failed to invalidate session in database:', error);
+        }
       }
       
       // Clear session data
       SessionManager.clearSession();
       
       // Sign out from Supabase
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.warn('Supabase signout error:', error);
+      }
+      
+      // Set final auth state
+      setAuthState({
+        isAuthenticated: false,
+        user: null,
+        loading: false
+      });
     } catch (error) {
       console.error('Logout error:', error);
-    } finally {
+      // Even if logout fails, clear the state
+      SessionManager.clearSession();
       setAuthState({
         isAuthenticated: false,
         user: null,

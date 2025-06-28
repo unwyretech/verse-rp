@@ -28,6 +28,17 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
     ...(user?.role === 'admin' ? [{ icon: Shield, label: 'Admin', path: '/admin' }] : [])
   ];
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Navigation will be handled by the auth state change in App.tsx
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force navigation to login even if logout fails
+      navigate('/login', { replace: true });
+    }
+  };
+
   return (
     <>
       {/* Mobile Menu Button */}
@@ -109,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
                 )}
               </div>
               <button
-                onClick={logout}
+                onClick={handleLogout}
                 className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 transition-all duration-200 text-sm"
               >
                 Logout
