@@ -74,34 +74,30 @@ const ProfilePage: React.FC = () => {
     <div className="min-h-screen bg-black/10 backdrop-blur-sm">
       {/* Profile Header */}
       <div className="relative">
-        <div className="h-48 bg-gradient-to-r from-purple-600 via-pink-600 to-purple-800 relative">
+        <div className="h-48 relative">
           <img
             src={user.headerImage}
             alt="Profile header"
             className="w-full h-full object-cover"
-            style={{ width: '1500px', height: '500px', objectFit: 'cover' }}
           />
-          <button className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors">
+          <button 
+            onClick={() => setShowEditProfile(true)}
+            className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors"
+          >
             <Camera className="w-5 h-5 text-white" />
           </button>
         </div>
 
         <div className="relative px-6 pb-6">
           <div className="flex items-end justify-between -mt-16 mb-4">
-            <div className="relative">
-              <img
-                src={user.avatar}
-                alt={user.displayName}
-                className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-900 bg-gray-900"
-                style={{ width: '350px', height: '350px', objectFit: 'cover' }}
-              />
-              <button className="absolute bottom-2 right-2 p-2 bg-purple-600 hover:bg-purple-700 rounded-full transition-colors">
-                <Camera className="w-4 h-4 text-white" />
-              </button>
-            </div>
+            <img
+              src={user.avatar}
+              alt={user.displayName}
+              className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-900 bg-gray-900 relative z-10"
+            />
             <button
               onClick={() => setShowEditProfile(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors text-white border border-gray-600"
+              className="flex items-center space-x-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-full transition-colors text-white"
             >
               <Edit3 className="w-4 h-4" />
               <span>Edit Profile</span>
@@ -145,6 +141,10 @@ const ProfilePage: React.FC = () => {
               <div>
                 <span className="font-bold text-white">{userCharacters.length}</span>
                 <span className="text-gray-400 ml-1">Characters</span>
+              </div>
+              <div>
+                <span className="font-bold text-white">{userPosts.length}</span>
+                <span className="text-gray-400 ml-1">Posts</span>
               </div>
             </div>
           </div>
