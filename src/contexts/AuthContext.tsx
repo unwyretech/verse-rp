@@ -8,6 +8,7 @@ interface AuthContextType extends AuthState {
   register: (username: string, password: string, displayName: string, writersTag: string, email: string) => Promise<boolean>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   verifyOTP: (code: string) => Promise<boolean>;
   enableTwoFactor: (email: string) => Promise<boolean>;
 }
@@ -90,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         followers: profile.followers || [],
         following: profile.following || [],
         createdAt: new Date(profile.created_at),
+        role: profile.role || 'user',
         privacySettings: profile.privacy_settings?.[0] ? {
           profileVisibility: profile.privacy_settings[0].profile_visibility,
           messagePermissions: profile.privacy_settings[0].message_permissions,
@@ -190,7 +192,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             display_name: displayName,
             email,
             writers_tag: writersTag,
-            bio: 'New to CharacterVerse!'
+            bio: 'New to CharacterVerse!',
+            role: 'user'
           });
 
         if (profileError) {
@@ -240,6 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase
         .from('profiles')
         .update({
+          username: updates.username,
           display_name: updates.displayName,
           bio: updates.bio,
           writers_tag: updates.writersTag,
@@ -274,6 +278,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }));
     } catch (error) {
       console.error('Error updating user:', error);
+      throw error;
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        console.error('Password change error:', error);
+        throw new Error(error.message || 'Failed to change password');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Password change error:', error);
+      throw error;
     }
   };
 
@@ -296,6 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       register,
       logout,
       updateUser,
+      changePassword,
       verifyOTP,
       enableTwoFactor
     }}>

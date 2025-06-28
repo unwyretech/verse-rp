@@ -16,6 +16,8 @@ const CharacterProfile: React.FC<CharacterProfileProps> = ({ character, onClose 
   const [activeTab, setActiveTab] = useState<'posts' | 'followers' | 'following'>('posts');
   const [followers, setFollowers] = useState<User[]>([]);
   const [following, setFollowing] = useState<(User | Character)[]>([]);
+  const [followerCount, setFollowerCount] = useState(character.followers.length);
+  const [followingCount, setFollowingCount] = useState(character.following.length);
 
   const isOwnCharacter = character.userId === user?.id;
   const isFollowing = character.followers.includes(user?.id || '');
@@ -31,14 +33,32 @@ const CharacterProfile: React.FC<CharacterProfileProps> = ({ character, onClose 
     }
   }, [activeTab, character.id]);
 
+  // Real-time refresh for follower/following counts
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadFollowerCounts();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [character.id]);
+
+  const loadFollowerCounts = async () => {
+    const followersList = await getCharacterFollowers(character.id);
+    const followingList = await getCharacterFollowing(character.id);
+    setFollowerCount(followersList.length);
+    setFollowingCount(followingList.length);
+  };
+
   const loadFollowers = async () => {
     const followersList = await getCharacterFollowers(character.id);
     setFollowers(followersList);
+    setFollowerCount(followersList.length);
   };
 
   const loadFollowing = async () => {
     const followingList = await getCharacterFollowing(character.id);
     setFollowing(followingList);
+    setFollowingCount(followingList.length);
   };
 
   const handleFollow = () => {
@@ -154,14 +174,14 @@ const CharacterProfile: React.FC<CharacterProfileProps> = ({ character, onClose 
                   onClick={() => setActiveTab('following')}
                   className="hover:text-white transition-colors"
                 >
-                  <span className="font-bold text-white">{character.following.length}</span>
+                  <span className="font-bold text-white">{followingCount}</span>
                   <span className="text-gray-400 ml-1">Following</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('followers')}
                   className="hover:text-white transition-colors"
                 >
-                  <span className="font-bold text-white">{character.followers.length}</span>
+                  <span className="font-bold text-white">{followerCount}</span>
                   <span className="text-gray-400 ml-1">Followers</span>
                 </button>
                 <div>
@@ -178,8 +198,8 @@ const CharacterProfile: React.FC<CharacterProfileProps> = ({ character, onClose 
           <div className="flex">
             {[
               { key: 'posts', label: 'Posts', count: characterPosts.length },
-              { key: 'followers', label: 'Followers', count: character.followers.length },
-              { key: 'following', label: 'Following', count: character.following.length }
+              { key: 'followers', label: 'Followers', count: followerCount },
+              { key: 'following', label: 'Following', count: followingCount }
             ].map(tab => (
               <button
                 key={tab.key}

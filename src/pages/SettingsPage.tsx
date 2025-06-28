@@ -3,15 +3,18 @@ import { Shield, Lock, Bell, Eye, User, Smartphone, Key, Mail } from 'lucide-rea
 import { useAuth } from '../contexts/AuthContext';
 
 const SettingsPage: React.FC = () => {
-  const { user, updateUser, enableTwoFactor } = useAuth();
+  const { user, updateUser, enableTwoFactor, changePassword } = useAuth();
   const [activeSection, setActiveSection] = useState('privacy');
   const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
     email: user?.email || '',
-    otpCode: ''
+    otpCode: '',
+    username: user?.username || ''
   });
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   const sections = [
     { key: 'privacy', label: 'Privacy & Safety', icon: Shield },
@@ -23,11 +26,46 @@ const SettingsPage: React.FC = () => {
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.newPassword !== formData.confirmPassword) {
-      alert('Passwords do not match');
+      setMessage('Passwords do not match');
       return;
     }
-    // Handle password change
-    console.log('Password change requested');
+
+    setLoading(true);
+    setMessage('');
+
+    try {
+      await changePassword(formData.currentPassword, formData.newPassword);
+      setMessage('Password changed successfully');
+      setFormData(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }));
+    } catch (error: any) {
+      setMessage(error.message || 'Failed to change password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUsernameChange = async () => {
+    if (!formData.username.trim()) {
+      setMessage('Username cannot be empty');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+
+    try {
+      await updateUser({ username: formData.username });
+      setMessage('Username updated successfully');
+    } catch (error: any) {
+      setMessage(error.message || 'Failed to update username');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEnable2FA = async () => {
@@ -77,6 +115,16 @@ const SettingsPage: React.FC = () => {
 
         {/* Settings Content */}
         <div className="flex-1 p-4 lg:p-6 overflow-y-auto">
+          {message && (
+            <div className={`mb-4 p-3 rounded-lg ${
+              message.includes('successfully') 
+                ? 'bg-green-900/20 border border-green-500/30 text-green-400'
+                : 'bg-red-900/20 border border-red-500/30 text-red-400'
+            }`}>
+              {message}
+            </div>
+          )}
+
           {activeSection === 'privacy' && (
             <div className="space-y-6 max-w-2xl">
               <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50">
@@ -143,13 +191,21 @@ const SettingsPage: React.FC = () => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
-                    <input
-                      type="text"
-                      value={user?.username}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
-                      readOnly
-                    />
-                    <p className="text-gray-500 text-xs mt-1">Username cannot be changed</p>
+                    <div className="flex space-x-3">
+                      <input
+                        type="text"
+                        value={formData.username}
+                        onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                        className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={handleUsernameChange}
+                        disabled={loading || formData.username === user?.username}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                      >
+                        Update
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Display Name</label>
@@ -198,6 +254,7 @@ const SettingsPage: React.FC = () => {
                       value={formData.currentPassword}
                       onChange={(e) => setFormData(prev => ({ ...prev, currentPassword: e.target.value }))}
                       className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      required
                     />
                   </div>
                   <div>
@@ -207,6 +264,7 @@ const SettingsPage: React.FC = () => {
                       value={formData.newPassword}
                       onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
                       className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      required
                     />
                   </div>
                   <div>
@@ -216,13 +274,15 @@ const SettingsPage: React.FC = () => {
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      required
                     />
                   </div>
                   <button
                     type="submit"
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
+                    disabled={loading}
+                    className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-2 rounded-lg transition-colors"
                   >
-                    Update Password
+                    {loading ? 'Updating...' : 'Update Password'}
                   </button>
                 </form>
               </div>

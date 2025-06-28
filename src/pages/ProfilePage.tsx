@@ -16,6 +16,8 @@ const ProfilePage: React.FC = () => {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [followers, setFollowers] = useState<User[]>([]);
   const [following, setFollowing] = useState<User[]>([]);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
 
   const userPosts = posts.filter(post => post.userId === user?.id);
   const userCharacters = characters.filter(char => char.userId === user?.id);
@@ -37,10 +39,31 @@ const ProfilePage: React.FC = () => {
     }
   }, [activeTab, user]);
 
+  // Real-time refresh for follower/following counts
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      loadFollowerCounts();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const loadFollowerCounts = async () => {
+    if (user) {
+      const followersList = await getUserFollowers(user.id);
+      const followingList = await getUserFollowing(user.id);
+      setFollowerCount(followersList.length);
+      setFollowingCount(followingList.length);
+    }
+  };
+
   const loadFollowers = async () => {
     if (user) {
       const followersList = await getUserFollowers(user.id);
       setFollowers(followersList);
+      setFollowerCount(followersList.length);
     }
   };
 
@@ -48,6 +71,7 @@ const ProfilePage: React.FC = () => {
     if (user) {
       const followingList = await getUserFollowing(user.id);
       setFollowing(followingList);
+      setFollowingCount(followingList.length);
     }
   };
 
@@ -108,6 +132,9 @@ const ProfilePage: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold text-white">{user.displayName}</h1>
               <p className="text-gray-400">@{user.username}</p>
+              {user.role === 'admin' && (
+                <p className="text-red-400 text-sm font-medium">Administrator</p>
+              )}
             </div>
 
             <p className="text-gray-300">{user.bio}</p>
@@ -128,14 +155,14 @@ const ProfilePage: React.FC = () => {
                 onClick={() => setActiveTab('following')}
                 className="hover:text-white transition-colors"
               >
-                <span className="font-bold text-white">{user.following.length}</span>
+                <span className="font-bold text-white">{followingCount}</span>
                 <span className="text-gray-400 ml-1">Following</span>
               </button>
               <button
                 onClick={() => setActiveTab('followers')}
                 className="hover:text-white transition-colors"
               >
-                <span className="font-bold text-white">{user.followers.length}</span>
+                <span className="font-bold text-white">{followerCount}</span>
                 <span className="text-gray-400 ml-1">Followers</span>
               </button>
               <div>
@@ -156,9 +183,9 @@ const ProfilePage: React.FC = () => {
         <div className="flex">
           {[
             { key: 'posts', label: 'Posts', count: userPosts.length },
-            { key: 'characters', label: 'Characters', count: userCharacters.length },
-            { key: 'followers', label: 'Followers', count: user.followers.length },
-            { key: 'following', label: 'Following', count: user.following.length }
+            { key: 'characters', label: 'Characters', count: user Characters.length },
+            { key: 'followers', label: 'Followers', count: followerCount },
+            { key: 'following', label: 'Following', count: followingCount }
           ].map(tab => (
             <button
               key={tab.key}

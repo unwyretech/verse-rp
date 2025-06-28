@@ -13,6 +13,7 @@ export interface User {
   following: string[];
   createdAt: Date;
   privacySettings: PrivacySettings;
+  role?: 'user' | 'admin';
 }
 
 export interface PrivacySettings {

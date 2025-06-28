@@ -57,6 +57,10 @@ interface AppContextType {
   unbookmarkUser: (userId: string) => void;
   getChatMessages: (chatId: string) => Promise<Message[]>;
   markMessagesAsRead: (chatId: string) => void;
+  // Admin functions
+  getAllUsersAdmin: () => Promise<User[]>;
+  deleteUserAdmin: (userId: string) => Promise<boolean>;
+  resetPasswordAdmin: (userId: string, newPassword: string) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -200,6 +204,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user]);
 
+  // Real-time refresh for follower/following counts
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      loadAllUsers();
+      loadCharacters();
+      loadFollowedUsers();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [user]);
+
   const loadBookmarks = () => {
     if (!user) return;
     
@@ -252,6 +269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         followers: profile.followers || [],
         following: profile.following || [],
         createdAt: new Date(profile.created_at),
+        role: profile.role || 'user',
         privacySettings: {
           profileVisibility: 'public',
           messagePermissions: 'everyone',
@@ -366,6 +384,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             followers: post.profile.followers || [],
             following: post.profile.following || [],
             createdAt: new Date(post.profile.created_at),
+            role: post.profile.role || 'user',
             privacySettings: {
               profileVisibility: 'public',
               messagePermissions: 'everyone',
@@ -406,6 +425,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               followers: comment.profile.followers || [],
               following: comment.profile.following || [],
               createdAt: new Date(comment.profile.created_at),
+              role: comment.profile.role || 'user',
               privacySettings: {
                 profileVisibility: 'public',
                 messagePermissions: 'everyone',
@@ -475,6 +495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           followers: notif.from_profile.followers || [],
           following: notif.from_profile.following || [],
           createdAt: new Date(notif.from_profile.created_at),
+          role: notif.from_profile.role || 'user',
           privacySettings: {
             profileVisibility: 'public',
             messagePermissions: 'everyone',
@@ -1327,6 +1348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         followers: follow.follower.followers || [],
         following: follow.follower.following || [],
         createdAt: new Date(follow.follower.created_at),
+        role: follow.follower.role || 'user',
         privacySettings: {
           profileVisibility: 'public',
           messagePermissions: 'everyone',
@@ -1365,6 +1387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         followers: follow.following.followers || [],
         following: follow.following.following || [],
         createdAt: new Date(follow.following.created_at),
+        role: follow.following.role || 'user',
         privacySettings: {
           profileVisibility: 'public',
           messagePermissions: 'everyone',
@@ -1445,6 +1468,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveBookmarks('users', newBookmarks);
   };
 
+  // Admin functions
+  const getAllUsersAdmin = async (): Promise<User[]> => {
+    if (!user || user.role !== 'admin') {
+      throw new Error('Admin access required');
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return data.map(profile => ({
+        id: profile.id,
+        username: profile.username,
+        displayName: profile.display_name,
+        avatar: profile.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+        headerImage: profile.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=1500&h=500',
+        bio: profile.bio || '',
+        writersTag: profile.writers_tag,
+        email: profile.email,
+        twoFactorEnabled: profile.two_factor_enabled || false,
+        characters: [],
+        followers: profile.followers || [],
+        following: profile.following || [],
+        createdAt: new Date(profile.created_at),
+        role: profile.role || 'user',
+        privacySettings: {
+          profileVisibility: 'public',
+          messagePermissions: 'everyone',
+          tagNotifications: true,
+          directMessageNotifications: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading users for admin:', error);
+      throw error;
+    }
+  };
+
+  const deleteUserAdmin = async (userId: string): Promise<boolean> => {
+    if (!user || user.role !== 'admin') {
+      throw new Error('Admin access required');
+    }
+
+    try {
+      const { error } = await supabase.rpc('admin_delete_user', {
+        target_user_id: userId
+      });
+
+      if (error) throw error;
+
+      // Refresh user list
+      loadAllUsers();
+      return true;
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
+  };
+
+  const resetPasswordAdmin = async (userId: string, newPassword: string): Promise<boolean> => {
+    if (!user || user.role !== 'admin') {
+      throw new Error('Admin access required');
+    }
+
+    try {
+      const { error } = await supabase.rpc('admin_reset_password', {
+        target_user_id: userId,
+        new_password: newPassword
+      });
+
+      if (error) throw error;
+
+      return true;
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      throw error;
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       characters,
@@ -1499,7 +1605,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unbookmarkCharacter,
       unbookmarkUser,
       getChatMessages,
-      markMessagesAsRead
+      markMessagesAsRead,
+      getAllUsersAdmin,
+      deleteUserAdmin,
+      resetPasswordAdmin
     }}>
       {children}
     </AppContext.Provider>

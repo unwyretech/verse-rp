@@ -11,6 +11,7 @@ import MessagesPage from './pages/MessagesPage';
 import BookmarksPage from './pages/BookmarksPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
+import AdminPage from './pages/AdminPage';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
 
@@ -35,6 +36,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/bookmarks" element={<BookmarksPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

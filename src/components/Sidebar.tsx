@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Search, Bell, Mail, Bookmark, User, Settings, Feather, Plus, Menu, X } from 'lucide-react';
+import { Home, Search, Bell, Mail, Bookmark, User, Settings, Feather, Plus, Menu, X, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 
@@ -24,6 +24,8 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
     { icon: Bookmark, label: 'Bookmarks', path: '/bookmarks' },
     { icon: User, label: 'Profile', path: '/profile' },
     { icon: Settings, label: 'Settings', path: '/settings' },
+    // Only show admin link for admin users
+    ...(user?.role === 'admin' ? [{ icon: Shield, label: 'Admin', path: '/admin' }] : [])
   ];
 
   return (
@@ -72,6 +74,11 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
                     {item.badge > 99 ? '99+' : item.badge}
                   </span>
                 )}
+                {item.label === 'Admin' && (
+                  <span className="absolute right-3 bg-red-500 text-white text-xs rounded-full px-2 py-1">
+                    ADMIN
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -97,6 +104,9 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
               <div className="flex-1 min-w-0">
                 <p className="text-white font-medium truncate">{user?.displayName}</p>
                 <p className="text-gray-400 text-sm truncate">@{user?.username}</p>
+                {user?.role === 'admin' && (
+                  <p className="text-red-400 text-xs">Administrator</p>
+                )}
               </div>
               <button
                 onClick={logout}
