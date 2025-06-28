@@ -15,6 +15,7 @@ interface AppContextType {
   bookmarkedPosts: string[];
   bookmarkedCharacters: string[];
   bookmarkedUsers: string[];
+  followedUserIds: Set<string>;
   setCharacters: (characters: Character[]) => void;
   setPosts: (posts: Post[]) => void;
   setNotifications: (notifications: Notification[]) => void;
@@ -79,6 +80,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([]);
   const [bookmarkedCharacters, setBookmarkedCharacters] = useState<string[]>([]);
   const [bookmarkedUsers, setBookmarkedUsers] = useState<string[]>([]);
+  const [followedUserIds, setFollowedUserIds] = useState<Set<string>>(new Set());
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
   const unreadMessages = chats.reduce((total, chat) => {
@@ -87,6 +89,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return total;
   }, 0);
+
+  // Load followed user IDs from database
+  const loadFollowedUsers = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id);
+
+      if (error) throw error;
+
+      const followedIds = new Set(data.map(follow => follow.following_id));
+      setFollowedUserIds(followedIds);
+    } catch (error) {
+      console.error('Error loading followed users:', error);
+    }
+  };
 
   // Real-time subscriptions
   useEffect(() => {
@@ -150,6 +171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .channel('follows')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => {
         loadAllUsers();
+        loadFollowedUsers(); // Reload followed users when follows change
         loadPosts(); // Refresh posts when follows change
       })
       .subscribe();
@@ -174,6 +196,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loadChats();
       loadAllUsers();
       loadBookmarks();
+      loadFollowedUsers();
     }
   }, [user]);
 
@@ -1027,6 +1050,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       loadAllUsers();
+      loadFollowedUsers(); // Reload followed users
       loadNotifications();
     } catch (error) {
       console.error('Error following user:', error);
@@ -1044,6 +1068,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .eq('following_id', userId);
 
       loadAllUsers();
+      loadFollowedUsers(); // Reload followed users
     } catch (error) {
       console.error('Error unfollowing user:', error);
     }
@@ -1255,30 +1280,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getFilteredPosts = (viewingAs?: Character | 'user') => {
     if (!user) return [];
 
-    // Get list of followed user IDs
-    const followedUserIds = new Set<string>();
-    
-    // Add users that the main account follows
-    allUsers.forEach(otherUser => {
-      // Check if current user follows this user
-      const isFollowing = supabase
-        .from('follows')
-        .select('id')
-        .eq('follower_id', user.id)
-        .eq('following_id', otherUser.id);
-      
-      // For now, use a simple check based on user data
-      // In a real implementation, this would be properly queried
-      if (user.following.includes(otherUser.id)) {
-        followedUserIds.add(otherUser.id);
-      }
-    });
-
     if (viewingAs === 'user') {
       // Show posts from users the main account follows + own posts
       return posts.filter(post => {
         if (post.userId === user.id) return true; // Own posts
-        return followedUserIds.has(post.userId);
+        return followedUserIds.has(post.userId); // Posts from followed users
       });
     } else if (viewingAs) {
       // Show posts from accounts/characters this character follows + own posts
@@ -1452,6 +1458,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bookmarkedPosts,
       bookmarkedCharacters,
       bookmarkedUsers,
+      followedUserIds,
       setCharacters,
       setPosts,
       setNotifications,
