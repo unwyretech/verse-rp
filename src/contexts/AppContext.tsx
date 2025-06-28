@@ -551,14 +551,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ 
-          read_by: supabase.sql`array_append(read_by, ${user.id})`,
-          updated_at: new Date().toISOString()
-        })
-        .eq('chat_id', chatId)
-        .not('read_by', 'cs', `{${user.id}}`);
+      const { error } = await supabase.rpc('mark_messages_as_read', {
+        chat_id_param: chatId,
+        user_id_param: user.id
+      });
 
       if (error) throw error;
       
