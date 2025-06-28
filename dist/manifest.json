@@ -1,0 +1,22 @@
+{
+  "name": "VERSE - Social Media Platform for Roleplay Writers",
+  "short_name": "VERSE",
+  "description": "A social media platform designed for roleplay writers and character creators",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#a855f7",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "16x16 32x32",
+      "type": "image/x-icon"
+    }
+  ]
+}
