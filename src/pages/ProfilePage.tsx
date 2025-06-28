@@ -183,7 +183,7 @@ const ProfilePage: React.FC = () => {
         <div className="flex">
           {[
             { key: 'posts', label: 'Posts', count: userPosts.length },
-            { key: 'characters', label: 'Characters', count: user Characters.length },
+            { key: 'characters', label: 'Characters', count: userCharacters.length },
             { key: 'followers', label: 'Followers', count: followerCount },
             { key: 'following', label: 'Following', count: followingCount }
           ].map(tab => (
