@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, encryptData, decryptData, hashData } from '../lib/supabase';
+import { SessionManager, SessionData } from '../lib/sessionManager';
 import { User, AuthState } from '../types';
 import bcrypt from 'bcryptjs';
 
@@ -34,40 +35,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Session refresh interval
   useEffect(() => {
     let refreshInterval: NodeJS.Timeout;
+    let cleanupInterval: NodeJS.Timeout;
 
     if (authState.isAuthenticated) {
-      // Refresh session every 30 minutes
+      // Check session every 5 minutes
       refreshInterval = setInterval(() => {
-        refreshSession();
-      }, 30 * 60 * 1000);
+        checkAndRefreshSession();
+      }, 5 * 60 * 1000);
+
+      // Clean up expired sessions every hour
+      cleanupInterval = setInterval(() => {
+        SessionManager.cleanupExpiredSessions();
+      }, 60 * 60 * 1000);
     }
 
     return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
+      if (refreshInterval) clearInterval(refreshInterval);
+      if (cleanupInterval) clearInterval(cleanupInterval);
     };
   }, [authState.isAuthenticated]);
 
   useEffect(() => {
     let mounted = true;
 
-    // Check for existing session with timeout
-    const checkSession = async () => {
+    const initializeAuth = async () => {
       try {
-        // Set a timeout for the session check - increased to 30 seconds
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 30000)
-        );
+        // First, check for stored session
+        const storedSession = SessionManager.getStoredSession();
+        
+        if (storedSession) {
+          // Check if session is expired
+          if (SessionManager.isSessionExpired(storedSession.expiresAt)) {
+            console.log('Stored session expired, attempting refresh...');
+            const refreshedSession = await SessionManager.refreshSession(storedSession.refreshToken);
+            
+            if (refreshedSession) {
+              console.log('Session refreshed successfully');
+              await loadUserProfile(refreshedSession.userId);
+              return;
+            } else {
+              console.log('Session refresh failed, clearing session');
+              SessionManager.clearSession();
+            }
+          } else {
+            // Validate session with database
+            const validation = await SessionManager.validateSession(storedSession.sessionToken);
+            
+            if (validation.isValid && validation.userId) {
+              console.log('Stored session is valid');
+              await loadUserProfile(validation.userId);
+              return;
+            } else {
+              console.log('Stored session is invalid, clearing session');
+              SessionManager.clearSession();
+            }
+          }
+        }
 
-        const { data: { session }, error } = await Promise.race([
-          sessionPromise,
-          timeoutPromise
-        ]) as any;
+        // If no valid stored session, check Supabase session
+        const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
-          console.error('Session check error:', error);
+          console.error('Supabase session check error:', error);
           if (mounted) {
             setAuthState({
               isAuthenticated: false,
@@ -79,11 +108,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (session?.user && mounted) {
-          // Verify session is still valid
+          // Verify Supabase session is still valid
           const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
           
           if (userError || !currentUser) {
-            console.warn('Session invalid, logging out');
+            console.warn('Supabase session invalid, logging out');
             await supabase.auth.signOut();
             if (mounted) {
               setAuthState({
@@ -95,6 +124,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
 
+          // Create new session in our system
+          const { sessionToken, refreshToken } = SessionManager.generateTokens();
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+          const sessionCreated = await SessionManager.createSession(
+            session.user.id,
+            sessionToken,
+            refreshToken,
+            expiresAt
+          );
+
+          if (sessionCreated) {
+            const sessionData: SessionData = {
+              sessionToken,
+              refreshToken,
+              expiresAt,
+              userId: session.user.id
+            };
+            SessionManager.storeSession(sessionData);
+          }
+
           await loadUserProfile(session.user.id);
         } else if (mounted) {
           setAuthState({
@@ -104,9 +154,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
       } catch (error) {
-        console.error('Session check failed:', error);
+        console.error('Auth initialization failed:', error);
         if (mounted) {
-          // Clear any invalid session data
+          SessionManager.clearSession();
           await supabase.auth.signOut();
           setAuthState({
             isAuthenticated: false,
@@ -117,36 +167,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    checkSession();
+    initializeAuth();
 
-    // Listen for auth changes with error handling
+    // Listen for Supabase auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
       try {
         if (event === 'SIGNED_IN' && session?.user) {
+          // Create new session in our system
+          const { sessionToken, refreshToken } = SessionManager.generateTokens();
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+          const sessionCreated = await SessionManager.createSession(
+            session.user.id,
+            sessionToken,
+            refreshToken,
+            expiresAt
+          );
+
+          if (sessionCreated) {
+            const sessionData: SessionData = {
+              sessionToken,
+              refreshToken,
+              expiresAt,
+              userId: session.user.id
+            };
+            SessionManager.storeSession(sessionData);
+          }
+
           await loadUserProfile(session.user.id);
-        } else if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' && !session) {
+        } else if (event === 'SIGNED_OUT') {
+          const storedSession = SessionManager.getStoredSession();
+          if (storedSession) {
+            await SessionManager.invalidateSession(storedSession.sessionToken);
+          }
+          SessionManager.clearSession();
           setAuthState({
             isAuthenticated: false,
             user: null,
             loading: false
           });
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          // Verify the refreshed session
-          const { data: { user: currentUser }, error } = await supabase.auth.getUser();
-          if (error || !currentUser) {
-            console.warn('Token refresh failed, logging out');
-            await supabase.auth.signOut();
-            setAuthState({
-              isAuthenticated: false,
-              user: null,
-              loading: false
-            });
+          // Supabase token refreshed, but we manage our own sessions
+          const storedSession = SessionManager.getStoredSession();
+          if (storedSession && SessionManager.needsRefresh(storedSession.expiresAt)) {
+            await checkAndRefreshSession();
           }
         }
       } catch (error) {
         console.error('Auth state change error:', error);
+        SessionManager.clearSession();
         setAuthState({
           isAuthenticated: false,
           user: null,
@@ -160,6 +231,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription.unsubscribe();
     };
   }, []);
+
+  const checkAndRefreshSession = async () => {
+    const storedSession = SessionManager.getStoredSession();
+    
+    if (!storedSession) {
+      console.log('No stored session found');
+      await logout();
+      return;
+    }
+
+    if (SessionManager.isSessionExpired(storedSession.expiresAt)) {
+      console.log('Session expired, attempting refresh...');
+      const refreshedSession = await SessionManager.refreshSession(storedSession.refreshToken);
+      
+      if (!refreshedSession) {
+        console.log('Session refresh failed, logging out');
+        await logout();
+        return;
+      }
+      
+      console.log('Session refreshed successfully');
+    } else if (SessionManager.needsRefresh(storedSession.expiresAt)) {
+      console.log('Session needs refresh, refreshing...');
+      await SessionManager.refreshSession(storedSession.refreshToken);
+    }
+  };
 
   const loadUserProfile = async (userId: string) => {
     try {
@@ -175,7 +272,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Profile load error:', error);
-        // If profile doesn't exist or can't be loaded, sign out
+        SessionManager.clearSession();
         await supabase.auth.signOut();
         setAuthState({
           isAuthenticated: false,
@@ -220,6 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch (error) {
       console.error('Error loading user profile:', error);
+      SessionManager.clearSession();
       await supabase.auth.signOut();
       setAuthState({
         isAuthenticated: false,
@@ -230,38 +328,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshSession = async () => {
-    try {
-      const { data: { session }, error } = await supabase.auth.refreshSession();
-      
-      if (error) {
-        console.error('Session refresh error:', error);
-        // If refresh fails, sign out
-        await supabase.auth.signOut();
-        setAuthState({
-          isAuthenticated: false,
-          user: null,
-          loading: false
-        });
-        return;
-      }
-
-      if (!session) {
-        console.warn('No session after refresh');
-        setAuthState({
-          isAuthenticated: false,
-          user: null,
-          loading: false
-        });
-      }
-    } catch (error) {
-      console.error('Session refresh failed:', error);
-      await supabase.auth.signOut();
-      setAuthState({
-        isAuthenticated: false,
-        user: null,
-        loading: false
-      });
-    }
+    await checkAndRefreshSession();
   };
 
   const login = async (identifier: string, password: string): Promise<boolean> => {
@@ -273,7 +340,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       let email = identifier;
       if (!isEmail) {
-        // Get email from username with proper error handling
         try {
           const { data: profile, error } = await supabase
             .from('profiles')
@@ -308,7 +374,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(error.message || 'Login failed');
       }
 
-      // Don't set loading to false here - let the auth state change handler do it
+      // Session creation will be handled by the auth state change listener
       return true;
     } catch (error) {
       console.error('Login error:', error);
@@ -339,7 +405,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        // Create profile
         const { error: profileError } = await supabase
           .from('profiles')
           .insert({
@@ -365,7 +430,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw new Error(profileError.message || 'Failed to create user profile');
         }
 
-        // Create default privacy settings
         const { error: privacyError } = await supabase
           .from('privacy_settings')
           .insert({
@@ -379,7 +443,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (privacyError) console.warn('Privacy settings creation failed:', privacyError);
       }
 
-      // Don't set loading to false here - let the auth state change handler do it
       return true;
     } catch (error) {
       console.error('Registration error:', error);
@@ -391,10 +454,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       setAuthState(prev => ({ ...prev, loading: true }));
+      
+      // Invalidate session in our system
+      const storedSession = SessionManager.getStoredSession();
+      if (storedSession) {
+        await SessionManager.invalidateSession(storedSession.sessionToken);
+      }
+      
+      // Clear session data
+      SessionManager.clearSession();
+      
+      // Sign out from Supabase
       await supabase.auth.signOut();
-      // Clear any cached data
-      localStorage.clear();
-      sessionStorage.clear();
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -426,7 +497,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) throw error;
 
-      // Update privacy settings separately if provided
       if (updates.privacySettings) {
         const { error: privacyError } = await supabase
           .from('privacy_settings')
@@ -463,6 +533,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(error.message || 'Failed to change password');
       }
 
+      // Invalidate all other sessions for security
+      if (authState.user) {
+        await SessionManager.invalidateAllUserSessions(authState.user.id);
+        
+        // Create new session for current user
+        const { sessionToken, refreshToken } = SessionManager.generateTokens();
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await SessionManager.createSession(
+          authState.user.id,
+          sessionToken,
+          refreshToken,
+          expiresAt
+        );
+
+        SessionManager.storeSession({
+          sessionToken,
+          refreshToken,
+          expiresAt,
+          userId: authState.user.id
+        });
+      }
+
       return true;
     } catch (error) {
       console.error('Password change error:', error);
@@ -471,7 +564,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const verifyOTP = async (code: string): Promise<boolean> => {
-    // Mock OTP verification
     return code === '123456';
   };
 

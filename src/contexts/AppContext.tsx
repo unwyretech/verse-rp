@@ -72,7 +72,7 @@ export const useApp = () => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const [characters, setCharacters] = useState<Character[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -91,156 +91,117 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return total;
   }, 0);
 
-  // Real-time subscriptions with error handling
+  // Real-time subscriptions
   useEffect(() => {
-    if (!user || !isAuthenticated) return;
+    if (!user) return;
 
-    let subscriptions: any[] = [];
+    // Subscribe to posts
+    const postsSubscription = supabase
+      .channel('posts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+        loadPosts();
+      })
+      .subscribe();
 
-    const setupSubscriptions = async () => {
-      try {
-        // Subscribe to posts
-        const postsSubscription = supabase
-          .channel('posts')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
-            loadPosts().catch(console.error);
-          })
-          .subscribe();
+    // Subscribe to characters
+    const charactersSubscription = supabase
+      .channel('characters')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'characters' }, () => {
+        loadCharacters();
+      })
+      .subscribe();
 
-        // Subscribe to characters
-        const charactersSubscription = supabase
-          .channel('characters')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'characters' }, () => {
-            loadCharacters().catch(console.error);
-          })
-          .subscribe();
+    // Subscribe to profiles
+    const profilesSubscription = supabase
+      .channel('profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        loadAllUsers();
+      })
+      .subscribe();
 
-        // Subscribe to profiles
-        const profilesSubscription = supabase
-          .channel('profiles')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-            loadAllUsers().catch(console.error);
-          })
-          .subscribe();
+    // Subscribe to notifications
+    const notificationsSubscription = supabase
+      .channel('notifications')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        loadNotifications();
+      })
+      .subscribe();
 
-        // Subscribe to notifications
-        const notificationsSubscription = supabase
-          .channel('notifications')
-          .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'notifications',
-            filter: `user_id=eq.${user.id}`
-          }, () => {
-            loadNotifications().catch(console.error);
-          })
-          .subscribe();
+    // Subscribe to messages
+    const messagesSubscription = supabase
+      .channel('messages')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        loadChats();
+      })
+      .subscribe();
 
-        // Subscribe to messages
-        const messagesSubscription = supabase
-          .channel('messages')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
-            loadChats().catch(console.error);
-          })
-          .subscribe();
+    // Subscribe to chats
+    const chatsSubscription = supabase
+      .channel('chats')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
+        loadChats();
+      })
+      .subscribe();
 
-        // Subscribe to chats
-        const chatsSubscription = supabase
-          .channel('chats')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
-            loadChats().catch(console.error);
-          })
-          .subscribe();
-
-        // Subscribe to follows
-        const followsSubscription = supabase
-          .channel('follows')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => {
-            loadAllUsers().catch(console.error);
-            loadPosts().catch(console.error);
-          })
-          .subscribe();
-
-        subscriptions = [
-          postsSubscription,
-          charactersSubscription,
-          profilesSubscription,
-          notificationsSubscription,
-          messagesSubscription,
-          chatsSubscription,
-          followsSubscription
-        ];
-      } catch (error) {
-        console.error('Error setting up subscriptions:', error);
-      }
-    };
-
-    setupSubscriptions();
+    // Subscribe to follows
+    const followsSubscription = supabase
+      .channel('follows')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => {
+        loadAllUsers();
+        loadPosts(); // Refresh posts when follows change
+      })
+      .subscribe();
 
     return () => {
-      subscriptions.forEach(sub => {
-        try {
-          sub.unsubscribe();
-        } catch (error) {
-          console.error('Error unsubscribing:', error);
-        }
-      });
+      postsSubscription.unsubscribe();
+      charactersSubscription.unsubscribe();
+      profilesSubscription.unsubscribe();
+      notificationsSubscription.unsubscribe();
+      messagesSubscription.unsubscribe();
+      chatsSubscription.unsubscribe();
+      followsSubscription.unsubscribe();
     };
-  }, [user, isAuthenticated]);
+  }, [user]);
 
   // Load data when user changes
   useEffect(() => {
-    if (user && isAuthenticated) {
-      Promise.all([
-        loadCharacters(),
-        loadPosts(),
-        loadNotifications(),
-        loadChats(),
-        loadAllUsers(),
-        loadBookmarks()
-      ]).catch(console.error);
-    } else {
-      // Clear data when user logs out
-      setCharacters([]);
-      setPosts([]);
-      setNotifications([]);
-      setChats([]);
-      setAllUsers([]);
-      setBookmarkedPosts([]);
-      setBookmarkedCharacters([]);
-      setBookmarkedUsers([]);
+    if (user) {
+      loadCharacters();
+      loadPosts();
+      loadNotifications();
+      loadChats();
+      loadAllUsers();
+      loadBookmarks();
     }
-  }, [user, isAuthenticated]);
+  }, [user]);
 
   const loadBookmarks = () => {
     if (!user) return;
     
-    try {
-      const savedBookmarkedPosts = localStorage.getItem(`bookmarkedPosts_${user.id}`);
-      const savedBookmarkedCharacters = localStorage.getItem(`bookmarkedCharacters_${user.id}`);
-      const savedBookmarkedUsers = localStorage.getItem(`bookmarkedUsers_${user.id}`);
-      
-      if (savedBookmarkedPosts) {
-        setBookmarkedPosts(JSON.parse(savedBookmarkedPosts));
-      }
-      if (savedBookmarkedCharacters) {
-        setBookmarkedCharacters(JSON.parse(savedBookmarkedCharacters));
-      }
-      if (savedBookmarkedUsers) {
-        setBookmarkedUsers(JSON.parse(savedBookmarkedUsers));
-      }
-    } catch (error) {
-      console.error('Error loading bookmarks:', error);
+    // Load from localStorage for now
+    const savedBookmarkedPosts = localStorage.getItem(`bookmarkedPosts_${user.id}`);
+    const savedBookmarkedCharacters = localStorage.getItem(`bookmarkedCharacters_${user.id}`);
+    const savedBookmarkedUsers = localStorage.getItem(`bookmarkedUsers_${user.id}`);
+    
+    if (savedBookmarkedPosts) {
+      setBookmarkedPosts(JSON.parse(savedBookmarkedPosts));
+    }
+    if (savedBookmarkedCharacters) {
+      setBookmarkedCharacters(JSON.parse(savedBookmarkedCharacters));
+    }
+    if (savedBookmarkedUsers) {
+      setBookmarkedUsers(JSON.parse(savedBookmarkedUsers));
     }
   };
 
   const saveBookmarks = (type: 'posts' | 'characters' | 'users', bookmarks: string[]) => {
     if (!user) return;
-    try {
-      localStorage.setItem(`bookmarked${type.charAt(0).toUpperCase() + type.slice(1)}_${user.id}`, JSON.stringify(bookmarks));
-    } catch (error) {
-      console.error('Error saving bookmarks:', error);
-    }
+    localStorage.setItem(`bookmarked${type.charAt(0).toUpperCase() + type.slice(1)}_${user.id}`, JSON.stringify(bookmarks));
   };
 
   const loadAllUsers = async () => {
@@ -283,6 +244,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAllUsers(formattedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
+    }
+  };
+
+  // Admin functions
+  const getAllUsersAdmin = async (): Promise<User[]> => {
+    if (!user || user.role !== 'admin') {
+      throw new Error('Access denied: Admin privileges required');
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return data.map(profile => ({
+        id: profile.id,
+        username: profile.username,
+        displayName: profile.display_name,
+        avatar: profile.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+        headerImage: profile.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=1500&h=500',
+        bio: profile.bio || '',
+        writersTag: profile.writers_tag,
+        email: profile.email,
+        twoFactorEnabled: profile.two_factor_enabled || false,
+        characters: [],
+        followers: profile.followers || [],
+        following: profile.following || [],
+        createdAt: new Date(profile.created_at),
+        role: profile.role || 'user',
+        privacySettings: {
+          profileVisibility: 'public',
+          messagePermissions: 'everyone',
+          tagNotifications: true,
+          directMessageNotifications: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading users for admin:', error);
+      throw error;
+    }
+  };
+
+  const deleteUserAdmin = async (userId: string): Promise<void> => {
+    if (!user || user.role !== 'admin') {
+      throw new Error('Access denied: Admin privileges required');
+    }
+
+    try {
+      const { error } = await supabase.rpc('admin_delete_user', {
+        target_user_id: userId
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
+  };
+
+  const resetPasswordAdmin = async (userId: string, newPassword: string): Promise<void> => {
+    if (!user || user.role !== 'admin') {
+      throw new Error('Access denied: Admin privileges required');
+    }
+
+    try {
+      // In a real implementation, this would use Supabase's admin API
+      // For now, we'll use the function we created
+      const { error } = await supabase.rpc('admin_reset_password', {
+        target_user_id: userId,
+        new_password: newPassword
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      throw error;
     }
   };
 
@@ -610,84 +650,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Admin functions
-  const getAllUsersAdmin = async (): Promise<User[]> => {
-    if (!user || user.role !== 'admin') {
-      throw new Error('Admin access required');
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      return data.map(profile => ({
-        id: profile.id,
-        username: profile.username,
-        displayName: profile.display_name,
-        avatar: profile.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
-        headerImage: profile.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=1500&h=500',
-        bio: profile.bio || '',
-        writersTag: profile.writers_tag,
-        email: profile.email,
-        twoFactorEnabled: profile.two_factor_enabled || false,
-        characters: [],
-        followers: profile.followers || [],
-        following: profile.following || [],
-        createdAt: new Date(profile.created_at),
-        role: profile.role || 'user',
-        privacySettings: {
-          profileVisibility: 'public',
-          messagePermissions: 'everyone',
-          tagNotifications: true,
-          directMessageNotifications: true
-        }
-      }));
-    } catch (error) {
-      console.error('Error loading all users:', error);
-      throw error;
-    }
-  };
-
-  const deleteUserAdmin = async (userId: string): Promise<void> => {
-    if (!user || user.role !== 'admin') {
-      throw new Error('Admin access required');
-    }
-
-    try {
-      const { error } = await supabase.rpc('admin_delete_user', {
-        target_user_id: userId
-      });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      throw error;
-    }
-  };
-
-  const resetPasswordAdmin = async (userId: string, newPassword: string): Promise<void> => {
-    if (!user || user.role !== 'admin') {
-      throw new Error('Admin access required');
-    }
-
-    try {
-      const { error } = await supabase.rpc('admin_reset_password', {
-        target_user_id: userId,
-        new_password: newPassword
-      });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error resetting password:', error);
-      throw error;
-    }
-  };
-
-  // ... (rest of the existing functions remain the same)
   const addCharacter = async (character: Omit<Character, 'id' | 'createdAt'>) => {
     if (!user) return;
 
@@ -825,7 +787,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       loadPosts();
-    
     } catch (error) {
       console.error('Error adding post:', error);
     }
