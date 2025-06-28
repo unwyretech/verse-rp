@@ -159,7 +159,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       charactersSubscription.unsubscribe();
       profilesSubscription.unsubscribe();
       notificationsSubscription.unsubscribe();
-      messages Subscription.unsubscribe();
+      messagesSubscription.unsubscribe();
       chatsSubscription.unsubscribe();
       followsSubscription.unsubscribe();
     };
