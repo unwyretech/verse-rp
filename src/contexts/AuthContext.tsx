@@ -55,10 +55,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check for existing session with timeout
     const checkSession = async () => {
       try {
-        // Set a timeout for the session check
+        // Set a timeout for the session check - increased to 30 seconds
         const sessionPromise = supabase.auth.getSession();
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 10000)
+          setTimeout(() => reject(new Error('Session check timeout')), 30000)
         );
 
         const { data: { session }, error } = await Promise.race([
