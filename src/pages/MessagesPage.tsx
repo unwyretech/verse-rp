@@ -21,6 +21,25 @@ const MessagesPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+  // Real-time refresh intervals
+  useEffect(() => {
+    const messageInterval = setInterval(() => {
+      if (selectedChat) {
+        loadMessages(selectedChat.id);
+      }
+    }, 1000);
+
+    const chatListInterval = setInterval(() => {
+      // This will trigger a re-render of the chat list
+      // The real-time subscriptions in AppContext will handle the actual updates
+    }, 1000);
+
+    return () => {
+      clearInterval(messageInterval);
+      clearInterval(chatListInterval);
+    };
+  }, [selectedChat]);
+
   // Handle window resize
   useEffect(() => {
     const handleResize = () => {
@@ -93,6 +112,9 @@ const MessagesPage: React.FC = () => {
     console.log('Delete chat:', chatId);
     // In a real app, this would delete the chat
     setShowDeleteConfirm(null);
+    if (selectedChat?.id === chatId) {
+      setSelectedChat(null);
+    }
   };
 
   const handleFileUpload = async (file: File, type: 'image' | 'video') => {
@@ -180,7 +202,7 @@ const MessagesPage: React.FC = () => {
   return (
     <>
       <div className="min-h-screen bg-black/10 backdrop-blur-sm flex relative">
-        {/* Chat List */}
+        {/* Chat List - Hidden when chat is selected on mobile */}
         <div className={`${isMobile ? (selectedChat ? 'hidden' : 'w-full') : 'w-80'} border-r border-gray-700/50 bg-black/20 ${isMobile ? 'absolute inset-0 z-10' : ''}`}>
           <div className="p-4 border-b border-gray-700/50">
             <div className="flex items-center justify-between mb-4">
@@ -267,7 +289,7 @@ const MessagesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Chat Area */}
+        {/* Chat Area - Full screen on mobile when chat is selected */}
         <div className={`flex-1 flex flex-col ${isMobile && selectedChat ? 'absolute inset-0 z-20 bg-gray-900' : ''}`}>
           {selectedChat ? (
             <>

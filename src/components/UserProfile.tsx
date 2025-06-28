@@ -68,14 +68,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ user: profileUser, onClose })
 
         {/* User Header */}
         <div className="relative">
-          <div 
-            className="h-48 relative bg-gradient-to-r from-purple-600 via-pink-600 to-purple-800"
-          >
+          <div className="h-48 relative bg-gradient-to-r from-purple-600 via-pink-600 to-purple-800">
             <img
               src={profileUser.headerImage}
               alt="Profile header"
               className="w-full h-full object-cover"
-              style={{ width: '1500px', height: '500px', objectFit: 'cover' }}
             />
           </div>
 
@@ -85,7 +82,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ user: profileUser, onClose })
                 src={profileUser.avatar}
                 alt={profileUser.displayName}
                 className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-900 bg-gray-900 relative z-10"
-                style={{ width: '350px', height: '350px', objectFit: 'cover' }}
               />
               {!isOwnProfile && (
                 <button

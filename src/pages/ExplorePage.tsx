@@ -23,12 +23,24 @@ const ExplorePage: React.FC = () => {
   }>({ writers: [], characters: [] });
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedCharacter, setSelectedCharacter] = useState<any>(null);
+  const [followingStates, setFollowingStates] = useState<Record<string, boolean>>({});
 
   // Load recommendations on component mount
   useEffect(() => {
     const recs = getRecommendations();
     setRecommendations(recs);
   }, [getRecommendations]);
+
+  // Initialize following states
+  useEffect(() => {
+    if (user) {
+      const states: Record<string, boolean> = {};
+      allUsers.forEach(writer => {
+        states[writer.id] = user.following.includes(writer.id);
+      });
+      setFollowingStates(states);
+    }
+  }, [user, allUsers]);
 
   // Handle search
   useEffect(() => {
@@ -70,10 +82,14 @@ const ExplorePage: React.FC = () => {
 
   const handleFollowUser = async (userId: string) => {
     await followUser(userId);
+    setFollowingStates(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
   };
 
   const isUserFollowing = (userId: string) => {
-    return user?.following.includes(userId) || false;
+    return followingStates[userId] || false;
   };
 
   const handleUserClick = (clickedUser: any) => {
@@ -238,7 +254,6 @@ const ExplorePage: React.FC = () => {
                       src={writer.headerImage}
                       alt={`${writer.displayName} header`}
                       className="w-full h-full object-cover"
-                      style={{ width: '1500px', height: '500px', objectFit: 'cover' }}
                     />
                   </div>
 
@@ -248,7 +263,6 @@ const ExplorePage: React.FC = () => {
                         src={writer.avatar}
                         alt={writer.displayName}
                         className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-800 bg-gray-800"
-                        style={{ width: '350px', height: '350px', objectFit: 'cover' }}
                       />
                       <div className="flex items-center space-x-2 mt-8">
                         <span className="text-purple-300 text-sm">#{writer.writersTag}</span>
