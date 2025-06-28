@@ -59,6 +59,7 @@ interface AppContextType {
   getAllUsersAdmin: () => Promise<User[]>;
   deleteUserAdmin: (userId: string) => Promise<void>;
   resetPasswordAdmin: (userId: string, newPassword: string) => Promise<void>;
+  updateUserRoleAdmin: (userId: string, role: 'user' | 'admin') => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -322,6 +323,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
     } catch (error) {
       console.error('Error resetting password:', error);
+      throw error;
+    }
+  };
+
+  const updateUserRoleAdmin = async (userId: string, role: 'user' | 'admin'): Promise<void> => {
+    if (!user || user.role !== 'admin') {
+      throw new Error('Access denied: Admin privileges required');
+    }
+
+    if (userId === user.id) {
+      throw new Error('Cannot change your own role');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          role,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      // Refresh users list
+      await loadAllUsers();
+    } catch (error) {
+      console.error('Error updating user role:', error);
       throw error;
     }
   };
@@ -1583,7 +1612,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       markMessagesAsRead,
       getAllUsersAdmin,
       deleteUserAdmin,
-      resetPasswordAdmin
+      resetPasswordAdmin,
+      updateUserRoleAdmin
     }}>
       {children}
     </AppContext.Provider>

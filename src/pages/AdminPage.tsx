@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, Trash2, Key, Search, AlertTriangle, UserX, RefreshCw } from 'lucide-react';
+import { Shield, Users, Trash2, Key, Search, AlertTriangle, UserX, RefreshCw, Crown, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
-import { User } from '../types';
+import { User as UserType } from '../types';
 
 const AdminPage: React.FC = () => {
   const { user } = useAuth();
-  const { getAllUsersAdmin, deleteUserAdmin, resetPasswordAdmin } = useApp();
-  const [users, setUsers] = useState<User[]>([]);
+  const { getAllUsersAdmin, deleteUserAdmin, resetPasswordAdmin, updateUserRoleAdmin } = useApp();
+  const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showPasswordReset, setShowPasswordReset] = useState<string | null>(null);
+  const [showRoleChange, setShowRoleChange] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -69,6 +70,25 @@ const AdminPage: React.FC = () => {
       setNewPassword('');
     } catch (error: any) {
       setMessage(error.message || 'Failed to reset password');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: 'user' | 'admin') => {
+    if (userId === user?.id) {
+      setMessage('Cannot change your own role');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await updateUserRoleAdmin(userId, newRole);
+      setMessage(`User role updated to ${newRole} successfully`);
+      setShowRoleChange(null);
+      loadUsers();
+    } catch (error: any) {
+      setMessage(error.message || 'Failed to update user role');
     } finally {
       setActionLoading(false);
     }
@@ -239,6 +259,14 @@ const AdminPage: React.FC = () => {
                         <td className="p-4">
                           <div className="flex items-center space-x-2">
                             <button
+                              onClick={() => setShowRoleChange(u.id)}
+                              disabled={u.id === user.id}
+                              className="p-2 text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Change Role"
+                            >
+                              <Crown className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => setShowPasswordReset(u.id)}
                               disabled={u.id === user.id}
                               className="p-2 text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -272,6 +300,54 @@ const AdminPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Role Change Modal */}
+      {showRoleChange && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-900 rounded-2xl border border-gray-700/50 p-6 mx-4 max-w-md w-full">
+            <div className="flex items-center space-x-3 mb-4">
+              <Crown className="w-8 h-8 text-purple-500" />
+              <h3 className="text-lg font-bold text-white">Change User Role</h3>
+            </div>
+            <p className="text-gray-300 mb-6">
+              Select the new role for this user. Admin users have full access to the admin panel and can manage other users.
+            </p>
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={() => handleRoleChange(showRoleChange, 'user')}
+                disabled={actionLoading}
+                className="w-full flex items-center space-x-3 p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-left"
+              >
+                <User className="w-5 h-5 text-gray-400" />
+                <div>
+                  <p className="text-white font-medium">Regular User</p>
+                  <p className="text-gray-400 text-sm">Standard user access</p>
+                </div>
+              </button>
+              <button
+                onClick={() => handleRoleChange(showRoleChange, 'admin')}
+                disabled={actionLoading}
+                className="w-full flex items-center space-x-3 p-3 bg-red-900/20 hover:bg-red-900/30 border border-red-500/30 rounded-lg transition-colors text-left"
+              >
+                <Shield className="w-5 h-5 text-red-400" />
+                <div>
+                  <p className="text-white font-medium">Administrator</p>
+                  <p className="text-gray-400 text-sm">Full admin access</p>
+                </div>
+              </button>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowRoleChange(null)}
+                disabled={actionLoading}
+                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
