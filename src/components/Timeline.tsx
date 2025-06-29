@@ -15,8 +15,16 @@ interface TimelineProps {
 
 const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePost }) => {
   const { user } = useAuth();
-  const { characters, getFilteredPosts, allUsers, bookmarkPost, unbookmarkPost, bookmarkedPosts } = useApp();
-  const [viewingAs, setViewingAs] = useState<Character | 'user' | null>('user');
+  const { 
+    characters, 
+    getFilteredPosts, 
+    allUsers, 
+    bookmarkPost, 
+    unbookmarkPost, 
+    bookmarkedPosts,
+    selectedCharacter,
+    setSelectedCharacter
+  } = useApp();
   const [showDropdown, setShowDropdown] = useState(false);
   const [feedMode, setFeedMode] = useState<'for-you' | 'browse'>('for-you');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -39,7 +47,7 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
     const interval = setInterval(refreshTimeline, 1000);
 
     return () => clearInterval(interval);
-  }, [posts, feedMode, viewingAs, user]);
+  }, [posts, feedMode, selectedCharacter, user]);
 
   // Get filtered posts based on selected viewing mode and feed mode
   const getTimelinePosts = () => {
@@ -48,12 +56,16 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
       return posts.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     } else {
       // Show filtered posts based on following relationships
-      return getFilteredPosts(viewingAs || 'user');
+      return getFilteredPosts(selectedCharacter || 'user');
     }
   };
 
   const handleViewingChange = (option: Character | 'user') => {
-    setViewingAs(option);
+    if (option === 'user') {
+      setSelectedCharacter(null);
+    } else {
+      setSelectedCharacter(option);
+    }
     setShowDropdown(false);
   };
 
@@ -70,15 +82,13 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
   };
 
   const getDisplayName = () => {
-    if (viewingAs === 'user') return 'Main Account';
-    if (viewingAs && typeof viewingAs === 'object') return viewingAs.name;
-    return 'Main Account';
+    if (!selectedCharacter) return 'Main Account';
+    return selectedCharacter.name;
   };
 
   const getDisplayAvatar = () => {
-    if (viewingAs === 'user') return user?.avatar;
-    if (viewingAs && typeof viewingAs === 'object') return viewingAs.avatar;
-    return user?.avatar;
+    if (!selectedCharacter) return user?.avatar;
+    return selectedCharacter.avatar;
   };
 
   return (
@@ -140,6 +150,9 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
                 <div className="flex-1 text-left">
                   <p className="text-white font-medium">Viewing as</p>
                   <p className="text-gray-400 text-sm">{getDisplayName()}</p>
+                  {selectedCharacter && (
+                    <p className="text-purple-300 text-xs">#{selectedCharacter.verseTag}</p>
+                  )}
                 </div>
                 <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
               </button>
@@ -149,7 +162,7 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
                   <button
                     onClick={() => handleViewingChange('user')}
                     className={`w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-700 transition-colors ${
-                      viewingAs === 'user' ? 'bg-gray-700' : ''
+                      !selectedCharacter ? 'bg-gray-700' : ''
                     }`}
                   >
                     <img
@@ -168,7 +181,7 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
                       key={character.id}
                       onClick={() => handleViewingChange(character)}
                       className={`w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-700 transition-colors ${
-                        viewingAs && typeof viewingAs === 'object' && viewingAs.id === character.id ? 'bg-gray-700' : ''
+                        selectedCharacter?.id === character.id ? 'bg-gray-700' : ''
                       }`}
                     >
                       <img
@@ -179,6 +192,7 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
                       <div className="text-left">
                         <p className="text-white font-medium">{character.name}</p>
                         <p className="text-gray-400 text-sm">@{character.username}</p>
+                        <p className="text-purple-300 text-xs">#{character.verseTag}</p>
                       </div>
                     </button>
                   ))}
@@ -197,7 +211,7 @@ const Timeline: React.FC<TimelineProps> = ({ posts, onLike, onRepost, onCreatePo
               <p className="text-gray-500 mb-6">
                 {feedMode === 'browse' 
                   ? 'Check back later for new content from the community.'
-                  : viewingAs === 'user' 
+                  : !selectedCharacter 
                     ? 'Follow other writers to see their posts here, or create your first post!'
                     : `Follow accounts or characters as ${getDisplayName()} to see their posts here.`
                 }

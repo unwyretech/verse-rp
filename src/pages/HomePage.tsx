@@ -10,7 +10,7 @@ const HomePage: React.FC = () => {
   const { user } = useAuth();
   const [showCreatePost, setShowCreatePost] = useState(false);
 
-  const handleCreatePost = (content: string, character?: Character) => {
+  const handleCreatePost = (content: string, character?: Character, mediaUrls?: string[]) => {
     if (!user) return;
 
     addPost({
@@ -21,7 +21,8 @@ const HomePage: React.FC = () => {
       user,
       isThread: false,
       visibility: 'public',
-      tags: content.match(/#\w+/g) || []
+      tags: content.match(/#\w+/g) || [],
+      mediaUrls
     });
     setShowCreatePost(false);
   };
