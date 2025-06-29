@@ -1302,7 +1302,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (error) throw error;
 
-      return commentsData || [];
+      return commentsData.map(comment => ({
+        id: comment.id,
+        content: comment.content,
+        userId: comment.user_id,
+        characterId: comment.character_id,
+        user: comment.profiles ? {
+          id: comment.profiles.id,
+          username: comment.profiles.username,
+          displayName: comment.profiles.display_name,
+          avatar: comment.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+          headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+          bio: '',
+          writersTag: '',
+          twoFactorEnabled: false,
+          characters: [],
+          followers: [],
+          following: [],
+          createdAt: new Date(),
+          privacySettings: {
+            profileVisibility: 'public',
+            messagePermissions: 'everyone',
+            tagNotifications: true,
+            directMessageNotifications: true
+          }
+        } : undefined,
+        character: comment.characters ? {
+          id: comment.characters.id,
+          username: comment.characters.username,
+          name: comment.characters.name,
+          title: '',
+          avatar: comment.characters.avatar_url || 'https://images.pexels.com/photos/1382734/pexels-photo-1382734.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+          headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+          bio: '',
+          universe: '',
+          verseTag: '',
+          traits: [],
+          userId: comment.user_id,
+          customColor: '#8b5cf6',
+          customFont: 'Inter',
+          followers: [],
+          following: [],
+          createdAt: new Date()
+        } : undefined,
+        timestamp: new Date(comment.created_at),
+        parentCommentId: comment.parent_comment_id
+      })) || [];
     } catch (error) {
       console.error('Error loading comments:', error);
       return [];
