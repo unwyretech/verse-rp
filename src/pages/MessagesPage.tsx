@@ -21,25 +21,28 @@ const MessagesPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [chatList, setChatList] = useState<Chat[]>([]);
 
-  // Real-time refresh intervals
+  // Real-time refresh intervals - every 1 second
   useEffect(() => {
-    const messageInterval = setInterval(() => {
+    const refreshData = () => {
+      // Refresh chat list and message previews
+      setChatList([...chats]);
+      
+      // Refresh messages for selected chat
       if (selectedChat) {
         loadMessages(selectedChat.id);
       }
-    }, 1000);
-
-    const chatListInterval = setInterval(() => {
-      // This will trigger a re-render of the chat list
-      // The real-time subscriptions in AppContext will handle the actual updates
-    }, 1000);
-
-    return () => {
-      clearInterval(messageInterval);
-      clearInterval(chatListInterval);
     };
-  }, [selectedChat]);
+
+    // Initial load
+    refreshData();
+
+    // Set up interval for real-time updates every 1 second
+    const interval = setInterval(refreshData, 1000);
+
+    return () => clearInterval(interval);
+  }, [chats, selectedChat]);
 
   // Handle window resize
   useEffect(() => {
@@ -165,7 +168,7 @@ const MessagesPage: React.FC = () => {
     input.click();
   };
 
-  const filteredChats = chats.filter(chat =>
+  const filteredChats = chatList.filter(chat =>
     chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     chat.participants.some(p => {
       const participant = allUsers.find(u => u.id === p);
@@ -200,6 +203,29 @@ const MessagesPage: React.FC = () => {
     }
     
     return 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
+  };
+
+  // Get sender information for message display
+  const getSenderInfo = (senderId: string) => {
+    const sender = allUsers.find(u => u.id === senderId);
+    return {
+      name: sender?.displayName || 'Unknown User',
+      avatar: sender?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350'
+    };
+  };
+
+  // Check if message is from current user
+  const isOwnMessage = (senderId: string) => senderId === user?.id;
+
+  // Check if we should show sender name (for group chats and non-consecutive messages)
+  const shouldShowSenderName = (message: Message, index: number) => {
+    if (!selectedChat?.isGroup) return false;
+    if (isOwnMessage(message.senderId)) return false;
+    
+    // Show name if it's the first message or if previous message is from different sender
+    if (index === 0) return true;
+    const prevMessage = messages[index - 1];
+    return prevMessage.senderId !== message.senderId;
   };
 
   return (
@@ -348,39 +374,62 @@ const MessagesPage: React.FC = () => {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.senderId === user?.id ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs rounded-2xl p-3 ${
-                      message.senderId === user?.id 
-                        ? 'bg-purple-600 rounded-br-md' 
-                        : 'bg-gray-800 rounded-bl-md'
-                    }`}>
-                      {message.mediaUrl && (
-                        <div className="mb-2">
-                          {message.mediaUrl.includes('.mp4') || message.mediaUrl.includes('.mov') || message.mediaUrl.includes('.avi') ? (
-                            <video
-                              src={message.mediaUrl}
-                              className="w-full max-w-xs rounded-lg"
-                              controls
-                            />
-                          ) : (
+                {messages.map((message, index) => {
+                  const senderInfo = getSenderInfo(message.senderId);
+                  const isOwn = isOwnMessage(message.senderId);
+                  const showSenderName = shouldShowSenderName(message, index);
+
+                  return (
+                    <div key={message.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-xs ${isOwn ? 'order-2' : 'order-1'}`}>
+                        {/* Sender name for group chats */}
+                        {showSenderName && (
+                          <div className="flex items-center space-x-2 mb-1 px-3">
                             <img
-                              src={message.mediaUrl}
-                              alt="Shared media"
-                              className="w-full max-w-xs rounded-lg"
+                              src={senderInfo.avatar}
+                              alt={senderInfo.name}
+                              className="w-4 h-4 rounded-full object-cover"
                             />
+                            <span className="text-xs text-gray-400 font-medium">
+                              {senderInfo.name}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Message bubble */}
+                        <div className={`rounded-2xl p-3 ${
+                          isOwn 
+                            ? 'bg-purple-600 rounded-br-md' 
+                            : 'bg-gray-800 rounded-bl-md'
+                        }`}>
+                          {message.mediaUrl && (
+                            <div className="mb-2">
+                              {message.mediaUrl.includes('.mp4') || message.mediaUrl.includes('.mov') || message.mediaUrl.includes('.avi') ? (
+                                <video
+                                  src={message.mediaUrl}
+                                  className="w-full max-w-xs rounded-lg"
+                                  controls
+                                />
+                              ) : (
+                                <img
+                                  src={message.mediaUrl}
+                                  alt="Shared media"
+                                  className="w-full max-w-xs rounded-lg"
+                                />
+                              )}
+                            </div>
                           )}
+                          <p className="text-white text-sm">{message.content}</p>
+                          <p className={`text-xs mt-1 ${
+                            isOwn ? 'text-purple-200' : 'text-gray-400'
+                          }`}>
+                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
                         </div>
-                      )}
-                      <p className="text-white text-sm">{message.content}</p>
-                      <p className={`text-xs mt-1 ${
-                        message.senderId === user?.id ? 'text-purple-200' : 'text-gray-400'
-                      }`}>
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Message Input */}
