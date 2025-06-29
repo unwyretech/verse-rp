@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
 import { useAuth } from './contexts/AuthContext';
@@ -18,26 +18,24 @@ import LoadingSpinner from './components/LoadingSpinner';
 const AppRoutes: React.FC = () => {
   const { isAuthenticated, loading, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Handle navigation after authentication state changes
   useEffect(() => {
     if (!loading) {
       if (!isAuthenticated) {
-        // Clear any cached data when not authenticated
-        localStorage.clear();
-        sessionStorage.clear();
-        // Redirect to login if not on login page
-        if (window.location.pathname !== '/login') {
+        // Only redirect to login if not already on login page
+        if (location.pathname !== '/login') {
           navigate('/login', { replace: true });
         }
-      } else if (isAuthenticated && window.location.pathname === '/login') {
+      } else if (isAuthenticated && location.pathname === '/login') {
         // Redirect to home if authenticated and on login page
         navigate('/', { replace: true });
       }
     }
-  }, [isAuthenticated, loading, navigate]);
+  }, [isAuthenticated, loading, navigate, location.pathname]);
 
-  // Show loading spinner while checking authentication
+  // Show loading spinner only on initial load, not on page refresh
   if (loading) {
     return <LoadingSpinner />;
   }

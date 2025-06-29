@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initializeAuth = async () => {
       try {
-        // Check for stored tokens
+        // Check for stored tokens first (fastest check)
         const storedTokens = TokenManager.getTokens();
         
         if (storedTokens) {
@@ -70,12 +70,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
 
-          // Token is valid, load user profile
+          // Token is valid, load user profile immediately
           await loadUserProfile(storedTokens.userId);
           return;
         }
 
-        // No stored tokens, check Supabase session
+        // No stored tokens, check Supabase session (slower fallback)
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
@@ -106,7 +106,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Auth initialization failed:', error);
         if (mounted) {
           TokenManager.clearTokens();
-          await supabase.auth.signOut();
           setAuthState({
             isAuthenticated: false,
             user: null,
@@ -190,7 +189,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Profile load error:', error);
         TokenManager.clearTokens();
-        await supabase.auth.signOut();
         setAuthState({
           isAuthenticated: false,
           user: null,
@@ -235,7 +233,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Error loading user profile:', error);
       TokenManager.clearTokens();
-      await supabase.auth.signOut();
       setAuthState({
         isAuthenticated: false,
         user: null,

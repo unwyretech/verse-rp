@@ -54,7 +54,7 @@ export class TokenManager {
       localStorage.removeItem(this.REFRESH_TOKEN_KEY);
       localStorage.removeItem(this.EXPIRES_AT_KEY);
       localStorage.removeItem(this.USER_ID_KEY);
-      sessionStorage.clear();
+      // Don't clear all sessionStorage, just specific items if needed
     } catch (error) {
       console.error('Failed to clear tokens:', error);
     }
@@ -71,11 +71,11 @@ export class TokenManager {
     return expiresAt <= fiveMinutesFromNow;
   }
 
-  // Generate simple tokens
+  // Generate simple tokens with longer expiry
   static generateTokens(userId: string): TokenData {
     const accessToken = this.generateToken();
     const refreshToken = this.generateToken();
-    const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+    const expiresAt = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
 
     return {
       accessToken,
