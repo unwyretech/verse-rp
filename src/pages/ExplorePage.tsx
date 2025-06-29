@@ -42,14 +42,44 @@ const ExplorePage: React.FC = () => {
     }
   }, [user, allUsers]);
 
-  // Handle search
+  // Handle search - show ALL matching users, not filtered
   useEffect(() => {
     if (searchQuery.trim()) {
-      const results = searchContent(searchQuery);
-      setSearchResults(results);
+      // Custom search that includes ALL users
+      const lowerQuery = searchQuery.toLowerCase();
+      
+      const matchingPosts = posts.filter(post =>
+        post.content.toLowerCase().includes(lowerQuery) ||
+        post.character?.name.toLowerCase().includes(lowerQuery) ||
+        post.user?.displayName.toLowerCase().includes(lowerQuery) ||
+        post.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
+      );
+
+      const matchingCharacters = characters.filter(char =>
+        char.name.toLowerCase().includes(lowerQuery) ||
+        char.username.toLowerCase().includes(lowerQuery) ||
+        char.verseTag.toLowerCase().includes(lowerQuery) ||
+        char.universe.toLowerCase().includes(lowerQuery) ||
+        char.bio.toLowerCase().includes(lowerQuery) ||
+        char.traits.some(trait => trait.toLowerCase().includes(lowerQuery))
+      );
+
+      // Show ALL users that match search, including current user
+      const matchingUsers = allUsers.filter(searchUser =>
+        searchUser.displayName.toLowerCase().includes(lowerQuery) ||
+        searchUser.username.toLowerCase().includes(lowerQuery) ||
+        searchUser.writersTag.toLowerCase().includes(lowerQuery) ||
+        searchUser.bio.toLowerCase().includes(lowerQuery)
+      );
+
+      setSearchResults({
+        posts: matchingPosts,
+        characters: matchingCharacters,
+        users: matchingUsers
+      });
       setActiveTab('search');
     }
-  }, [searchQuery, searchContent]);
+  }, [searchQuery, posts, characters, allUsers]);
 
   // Extract trending tags from posts
   const trendingTags = posts
@@ -69,7 +99,7 @@ const ExplorePage: React.FC = () => {
     .filter((tag, index, arr) => arr.indexOf(tag) === index)
     .slice(0, 8);
 
-  // Show ALL writers, not just those the user follows
+  // Show ALL writers, not filtered by following status
   const allWriters = allUsers.filter(writer => writer.id !== user?.id);
 
   const handleLike = (postId: string) => {
@@ -241,90 +271,104 @@ const ExplorePage: React.FC = () => {
           )}
 
           {activeTab === 'writers' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {allWriters.length > 0 ? allWriters.map(writer => (
-                <div 
-                  key={writer.id} 
-                  onClick={() => handleUserClick(writer)}
-                  className="bg-gray-800/50 rounded-2xl border border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer overflow-hidden"
-                >
-                  {/* Header Image */}
-                  <div className="h-32 relative">
-                    <img
-                      src={writer.headerImage}
-                      alt={`${writer.displayName} header`}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <div className="p-6">
-                    <div className="flex items-center space-x-4 -mt-16 mb-4 relative z-10">
+            <div className="space-y-4">
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-bold text-white mb-2">All Writers</h3>
+                <p className="text-gray-400 text-sm">Discover writers from the entire community</p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {allWriters.length > 0 ? allWriters.map(writer => (
+                  <div 
+                    key={writer.id} 
+                    onClick={() => handleUserClick(writer)}
+                    className="bg-gray-800/50 rounded-2xl border border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer overflow-hidden"
+                  >
+                    {/* Header Image */}
+                    <div className="h-32 relative">
                       <img
-                        src={writer.avatar}
-                        alt={writer.displayName}
-                        className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-800 bg-gray-800"
+                        src={writer.headerImage}
+                        alt={`${writer.displayName} header`}
+                        className="w-full h-full object-cover"
                       />
-                      <div className="flex items-center space-x-2 mt-8">
-                        <span className="text-purple-300 text-sm">#{writer.writersTag}</span>
-                      </div>
                     </div>
 
-                    <div className="space-y-3">
-                      <div>
-                        <h3 className="text-white font-bold text-lg">{writer.displayName}</h3>
-                        <p className="text-gray-400 text-sm">@{writer.username}</p>
+                    <div className="p-6">
+                      <div className="flex items-center space-x-4 -mt-16 mb-4 relative z-10">
+                        <img
+                          src={writer.avatar}
+                          alt={writer.displayName}
+                          className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-800 bg-gray-800"
+                        />
+                        <div className="flex items-center space-x-2 mt-8">
+                          <span className="text-purple-300 text-sm">#{writer.writersTag}</span>
+                        </div>
                       </div>
 
-                      <p className="text-gray-300 text-sm line-clamp-3">{writer.bio}</p>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
-                        <div className="flex items-center space-x-4 text-gray-400 text-sm">
-                          <span>{writer.followers.length} followers</span>
-                          <span>{writer.following.length} following</span>
+                      <div className="space-y-3">
+                        <div>
+                          <h3 className="text-white font-bold text-lg">{writer.displayName}</h3>
+                          <p className="text-gray-400 text-sm">@{writer.username}</p>
                         </div>
-                        
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleFollowUser(writer.id);
-                          }}
-                          className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                            isUserFollowing(writer.id)
-                              ? 'bg-gray-600 text-white hover:bg-gray-700'
-                              : 'bg-purple-600 text-white hover:bg-purple-700'
-                          }`}
-                        >
-                          {isUserFollowing(writer.id) ? (
-                            <>
-                              <UserMinus className="w-3 h-3" />
-                              <span>Unfollow</span>
-                            </>
-                          ) : (
-                            <>
-                              <UserPlus className="w-3 h-3" />
-                              <span>Follow</span>
-                            </>
-                          )}
-                        </button>
+
+                        <p className="text-gray-300 text-sm line-clamp-3">{writer.bio}</p>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
+                          <div className="flex items-center space-x-4 text-gray-400 text-sm">
+                            <span>{writer.followers.length} followers</span>
+                            <span>{writer.following.length} following</span>
+                          </div>
+                          
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFollowUser(writer.id);
+                            }}
+                            className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                              isUserFollowing(writer.id)
+                                ? 'bg-gray-600 text-white hover:bg-gray-700'
+                                : 'bg-purple-600 text-white hover:bg-purple-700'
+                            }`}
+                          >
+                            {isUserFollowing(writer.id) ? (
+                              <>
+                                <UserMinus className="w-3 h-3" />
+                                <span>Unfollow</span>
+                              </>
+                            ) : (
+                              <>
+                                <UserPlus className="w-3 h-3" />
+                                <span>Follow</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )) : (
-                <div className="col-span-full text-center py-12">
-                  <UserPlus className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                  <p className="text-gray-400">No writers found</p>
-                </div>
-              )}
+                )) : (
+                  <div className="col-span-full text-center py-12">
+                    <UserPlus className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-400">No writers found</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {activeTab === 'search' && searchQuery && (
             <div className="space-y-6">
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-bold text-white mb-2">Search Results for "{searchQuery}"</h3>
+                <p className="text-gray-400 text-sm">
+                  Found {searchResults.posts.length + searchResults.characters.length + searchResults.users.length} results
+                </p>
+              </div>
+
               {/* Search Results for Posts */}
               {searchResults.posts.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-bold text-white mb-4">Posts</h3>
+                  <h3 className="text-lg font-bold text-white mb-4">Posts ({searchResults.posts.length})</h3>
                   <div className="space-y-4">
                     {searchResults.posts.map(post => (
                       <PostCard
@@ -341,7 +385,7 @@ const ExplorePage: React.FC = () => {
               {/* Search Results for Characters */}
               {searchResults.characters.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-bold text-white mb-4">Characters</h3>
+                  <h3 className="text-lg font-bold text-white mb-4">Characters ({searchResults.characters.length})</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {searchResults.characters.map(character => (
                       <div key={character.id} onClick={() => handleCharacterClick(character)}>
@@ -359,7 +403,7 @@ const ExplorePage: React.FC = () => {
               {/* Search Results for Writers */}
               {searchResults.users.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-bold text-white mb-4">Writers</h3>
+                  <h3 className="text-lg font-bold text-white mb-4">Writers ({searchResults.users.length})</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {searchResults.users.map(writer => (
                       <div 
@@ -402,29 +446,31 @@ const ExplorePage: React.FC = () => {
                                 <span>{writer.following.length} following</span>
                               </div>
                               
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleFollowUser(writer.id);
-                                }}
-                                className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                                  isUserFollowing(writer.id)
-                                    ? 'bg-gray-600 text-white hover:bg-gray-700'
-                                    : 'bg-purple-600 text-white hover:bg-purple-700'
-                                }`}
-                              >
-                                {isUserFollowing(writer.id) ? (
-                                  <>
-                                    <UserMinus className="w-3 h-3" />
-                                    <span>Unfollow</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserPlus className="w-3 h-3" />
-                                    <span>Follow</span>
-                                  </>
-                                )}
-                              </button>
+                              {writer.id !== user?.id && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleFollowUser(writer.id);
+                                  }}
+                                  className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                                    isUserFollowing(writer.id)
+                                      ? 'bg-gray-600 text-white hover:bg-gray-700'
+                                      : 'bg-purple-600 text-white hover:bg-purple-700'
+                                  }`}
+                                >
+                                  {isUserFollowing(writer.id) ? (
+                                    <>
+                                      <UserMinus className="w-3 h-3" />
+                                      <span>Unfollow</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserPlus className="w-3 h-3" />
+                                      <span>Follow</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
