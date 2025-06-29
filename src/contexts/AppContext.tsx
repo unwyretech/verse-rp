@@ -177,11 +177,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          follower_count:get_follower_count(id),
-          following_count:get_following_count(id)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -334,14 +330,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .from('chats')
         .select(`
           *,
-          chat_participants!inner(user_id),
+          chat_participants!inner(
+            user_id,
+            profiles:user_id(id, username, display_name, avatar_url)
+          ),
           messages(
             id,
             content,
             sender_id,
             created_at,
             read_by,
-            is_encrypted
+            is_encrypted,
+            profiles:sender_id(id, username, display_name, avatar_url)
           )
         `)
         .eq('chat_participants.user_id', user.id)
@@ -354,9 +354,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? chat.messages[chat.messages.length - 1] 
           : null;
 
+        // Get participants with user info
+        const participants = chat.chat_participants?.map((p: any) => ({
+          id: p.user_id,
+          username: p.profiles?.username || 'Unknown',
+          displayName: p.profiles?.display_name || 'Unknown User',
+          avatar: p.profiles?.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350'
+        })) || [];
+
         return {
           id: chat.id,
-          participants: chat.chat_participants?.map((p: any) => p.user_id) || [],
+          participants: participants.map(p => p.id),
+          participantInfo: participants,
           isGroup: chat.is_group || false,
           name: chat.name,
           createdAt: new Date(chat.created_at),
@@ -365,6 +374,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             id: lastMessage.id,
             content: lastMessage.is_encrypted ? '🔒 Encrypted message' : lastMessage.content,
             senderId: lastMessage.sender_id,
+            senderInfo: lastMessage.profiles ? {
+              username: lastMessage.profiles.username,
+              displayName: lastMessage.profiles.display_name,
+              avatar: lastMessage.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350'
+            } : undefined,
             chatId: chat.id,
             timestamp: new Date(lastMessage.created_at),
             isEncrypted: lastMessage.is_encrypted || true,
@@ -747,12 +761,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createChat = async (participantIds: string[], isGroup: boolean, name?: string): Promise<Chat> => {
     try {
+      if (!user) throw new Error('User not authenticated');
+
       const { data: chatData, error: chatError } = await supabase
         .from('chats')
         .insert({
           name,
           is_group: isGroup,
-          created_by: user?.id,
+          created_by: user.id,
           is_encrypted: true
         })
         .select()
@@ -761,7 +777,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (chatError) throw chatError;
 
       // Add participants including current user
-      const allParticipants = [...participantIds, user?.id].filter(Boolean);
+      const allParticipants = [...participantIds, user.id].filter(Boolean);
       const participantInserts = allParticipants.map(userId => ({
         chat_id: chatData.id,
         user_id: userId
@@ -773,9 +789,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (participantError) throw participantError;
 
+      // Get participant info
+      const { data: participantData, error: participantInfoError } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url')
+        .in('id', allParticipants);
+
+      if (participantInfoError) throw participantInfoError;
+
+      const participantInfo = participantData.map(p => ({
+        id: p.id,
+        username: p.username,
+        displayName: p.display_name,
+        avatar: p.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350'
+      }));
+
       const newChat: Chat = {
         id: chatData.id,
-        participants: allParticipants as string[],
+        participants: allParticipants,
+        participantInfo,
         isGroup,
         name,
         createdAt: new Date(chatData.created_at),
@@ -794,7 +826,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: messagesData, error } = await supabase
         .from('messages')
-        .select('*')
+        .select(`
+          *,
+          profiles:sender_id(id, username, display_name, avatar_url)
+        `)
         .eq('chat_id', chatId)
         .order('created_at', { ascending: true });
 
@@ -804,6 +839,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: msg.id,
         content: msg.content,
         senderId: msg.sender_id,
+        senderInfo: msg.profiles ? {
+          username: msg.profiles.username,
+          displayName: msg.profiles.display_name,
+          avatar: msg.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350'
+        } : undefined,
         chatId: msg.chat_id,
         timestamp: new Date(msg.created_at),
         isEncrypted: msg.is_encrypted || true,

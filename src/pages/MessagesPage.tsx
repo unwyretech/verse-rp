@@ -107,6 +107,11 @@ const MessagesPage: React.FC = () => {
         id: Date.now().toString(),
         content: messageText.trim(),
         senderId: user.id,
+        senderInfo: {
+          username: user.username,
+          displayName: user.displayName,
+          avatar: user.avatar
+        },
         chatId: selectedChat.id,
         timestamp: new Date(),
         isEncrypted: true,
@@ -212,24 +217,38 @@ const MessagesPage: React.FC = () => {
     clearAllMessageNotifications();
   };
 
-  const filteredChats = chatList.filter(chat =>
-    chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    chat.participants.some(p => {
-      // We'll need to get user info from allUsers context
-      return false; // Simplified for now
-    })
-  );
+  const filteredChats = chatList.filter(chat => {
+    if (!searchQuery) return true;
+    
+    const query = searchQuery.toLowerCase();
+    
+    // Search by chat name
+    if (chat.name?.toLowerCase().includes(query)) return true;
+    
+    // Search by participant names
+    if (chat.participantInfo) {
+      return chat.participantInfo.some(p => 
+        p.displayName.toLowerCase().includes(query) ||
+        p.username.toLowerCase().includes(query)
+      );
+    }
+    
+    return false;
+  });
 
   const getChatDisplayName = (chat: Chat) => {
     if (chat.name) return chat.name;
     
-    // For now, return a simple name - in real app, would get participant names
-    const otherParticipants = chat.participants.filter(p => p !== user?.id);
-    if (otherParticipants.length === 1) {
-      return 'Direct Message';
+    if (chat.participantInfo) {
+      const otherParticipants = chat.participantInfo.filter(p => p.id !== user?.id);
+      if (otherParticipants.length === 1) {
+        return otherParticipants[0].displayName;
+      } else if (otherParticipants.length > 1) {
+        return `${otherParticipants[0].displayName} and ${otherParticipants.length - 1} others`;
+      }
     }
     
-    return `Group Chat (${chat.participants.length} members)`;
+    return 'Chat';
   };
 
   const getChatAvatar = (chat: Chat) => {
@@ -237,14 +256,36 @@ const MessagesPage: React.FC = () => {
       return 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
     }
     
+    if (chat.participantInfo) {
+      const otherParticipant = chat.participantInfo.find(p => p.id !== user?.id);
+      return otherParticipant?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
+    }
+    
     return 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
   };
 
   // Get sender information for message display
-  const getSenderInfo = (senderId: string) => {
-    // In a real app, this would look up user info
+  const getSenderInfo = (message: Message) => {
+    if (message.senderInfo) {
+      return {
+        name: message.senderId === user?.id ? 'You' : message.senderInfo.displayName,
+        avatar: message.senderInfo.avatar
+      };
+    }
+    
+    // Fallback to participant info
+    if (selectedChat?.participantInfo) {
+      const participant = selectedChat.participantInfo.find(p => p.id === message.senderId);
+      if (participant) {
+        return {
+          name: message.senderId === user?.id ? 'You' : participant.displayName,
+          avatar: participant.avatar
+        };
+      }
+    }
+    
     return {
-      name: senderId === user?.id ? 'You' : 'User',
+      name: message.senderId === user?.id ? 'You' : 'Unknown User',
       avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350'
     };
   };
@@ -434,7 +475,7 @@ const MessagesPage: React.FC = () => {
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.map((message, index) => {
-                  const senderInfo = getSenderInfo(message.senderId);
+                  const senderInfo = getSenderInfo(message);
                   const isOwn = isOwnMessage(message.senderId);
                   const showSenderName = shouldShowSenderName(message, index);
 

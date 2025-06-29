@@ -57,9 +57,8 @@ const ExplorePage: React.FC = () => {
       
       setVerseTags(uniqueVerseTags);
 
-      // Update all writers
-      const writers = allUsers.filter(writer => writer.id !== user?.id);
-      setAllWriters(writers);
+      // Update all writers - show ALL users from database
+      setAllWriters(allUsers);
 
       // Update following states
       if (user) {
@@ -302,7 +301,7 @@ const ExplorePage: React.FC = () => {
             <div className="space-y-4">
               <div className="text-center mb-6">
                 <h3 className="text-lg font-bold text-white mb-2">All Writers</h3>
-                <p className="text-gray-400 text-sm">Discover writers from the entire community</p>
+                <p className="text-gray-400 text-sm">Discover writers from the entire community ({allWriters.length} writers)</p>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -330,6 +329,9 @@ const ExplorePage: React.FC = () => {
                         />
                         <div className="flex items-center space-x-2 mt-8">
                           <span className="text-purple-300 text-sm">#{writer.writersTag}</span>
+                          {writer.role === 'admin' && (
+                            <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">ADMIN</span>
+                          )}
                         </div>
                       </div>
 
@@ -347,29 +349,31 @@ const ExplorePage: React.FC = () => {
                             <span>{writer.following.length} following</span>
                           </div>
                           
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleFollowUser(writer.id);
-                            }}
-                            className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                              isUserFollowing(writer.id)
-                                ? 'bg-gray-600 text-white hover:bg-gray-700'
-                                : 'bg-purple-600 text-white hover:bg-purple-700'
-                            }`}
-                          >
-                            {isUserFollowing(writer.id) ? (
-                              <>
-                                <UserMinus className="w-3 h-3" />
-                                <span>Unfollow</span>
-                              </>
-                            ) : (
-                              <>
-                                <UserPlus className="w-3 h-3" />
-                                <span>Follow</span>
-                              </>
-                            )}
-                          </button>
+                          {writer.id !== user?.id && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFollowUser(writer.id);
+                              }}
+                              className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                                isUserFollowing(writer.id)
+                                  ? 'bg-gray-600 text-white hover:bg-gray-700'
+                                  : 'bg-purple-600 text-white hover:bg-purple-700'
+                              }`}
+                            >
+                              {isUserFollowing(writer.id) ? (
+                                <>
+                                  <UserMinus className="w-3 h-3" />
+                                  <span>Unfollow</span>
+                                </>
+                              ) : (
+                                <>
+                                  <UserPlus className="w-3 h-3" />
+                                  <span>Follow</span>
+                                </>
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -457,6 +461,9 @@ const ExplorePage: React.FC = () => {
                             />
                             <div className="flex items-center space-x-2 mt-8">
                               <span className="text-purple-300 text-sm">#{writer.writersTag}</span>
+                              {writer.role === 'admin' && (
+                                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">ADMIN</span>
+                              )}
                             </div>
                           </div>
 

@@ -95,11 +95,22 @@ export interface Message {
   isEncrypted: boolean;
   readBy: string[];
   mediaUrl?: string;
+  senderInfo?: {
+    username: string;
+    displayName: string;
+    avatar: string;
+  };
 }
 
 export interface Chat {
   id: string;
   participants: string[];
+  participantInfo?: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatar: string;
+  }[];
   isGroup: boolean;
   name?: string;
   avatar?: string;
