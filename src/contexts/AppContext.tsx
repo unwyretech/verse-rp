@@ -36,6 +36,7 @@ interface AppContextType {
   clearAllNotifications: () => void;
   sendMessage: (chatId: string, content: string, senderId: string, mediaUrl?: string) => void;
   createChat: (participants: string[], isGroup?: boolean, name?: string) => Chat;
+  deleteChatForUser: (chatId: string, userId: string) => void;
   searchContent: (query: string) => { posts: Post[], characters: Character[], users: User[] };
   getRecommendations: () => { writers: User[], characters: Character[] };
   followUser: (userId: string) => void;
@@ -676,6 +677,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loadChats(); // Refresh chats to update unread count
     } catch (error) {
       console.error('Error marking messages as read:', error);
+    }
+  };
+
+  const deleteChatForUser = async (chatId: string, userId: string) => {
+    if (!user) return;
+
+    try {
+      // Remove the user from chat participants
+      const { error } = await supabase
+        .from('chat_participants')
+        .delete()
+        .eq('chat_id', chatId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      // Check if there are any remaining participants
+      const { data: remainingParticipants, error: participantsError } = await supabase
+        .from('chat_participants')
+        .select('user_id')
+        .eq('chat_id', chatId);
+
+      if (participantsError) throw participantsError;
+
+      // If no participants remain, delete the entire chat
+      if (remainingParticipants.length === 0) {
+        const { error: deleteChatError } = await supabase
+          .from('chats')
+          .delete()
+          .eq('id', chatId);
+
+        if (deleteChatError) throw deleteChatError;
+      }
+
+      // Remove the chat from local state
+      setChats(prev => prev.filter(chat => chat.id !== chatId));
+    } catch (error) {
+      console.error('Error deleting chat for user:', error);
     }
   };
 
@@ -1590,6 +1629,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearAllNotifications,
       sendMessage,
       createChat,
+      deleteChatForUser,
       searchContent,
       getRecommendations,
       followUser,
