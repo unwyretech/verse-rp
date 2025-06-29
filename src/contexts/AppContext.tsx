@@ -21,7 +21,7 @@ interface AppContextType {
   setSelectedCharacter: (character: Character | null) => void;
   
   // Actions
-  addPost: (postData: Partial<Post>) => void;
+  addPost: (postData: Partial<Post>) => Promise<void>;
   updatePost: (postId: string, updates: Partial<Post>) => void;
   deletePost: (postId: string) => void;
   likePost: (postId: string) => void;
@@ -56,7 +56,7 @@ interface AppContextType {
   markNotificationAsRead: (notificationId: string) => void;
   clearAllNotifications: () => void;
   
-  addComment: (postId: string, content: string, characterId?: string) => void;
+  addComment: (postId: string, content: string, characterId?: string) => Promise<void>;
   
   // Search and recommendations
   searchContent: (query: string) => { posts: Post[]; characters: Character[]; users: User[] };
@@ -252,7 +252,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select(`
           *,
           profiles:user_id(id, username, display_name, avatar_url),
-          characters:character_id(id, username, name, title, avatar_url, universe, verse_tag)
+          characters:character_id(id, username, name, title, avatar_url, universe, verse_tag),
+          comments(count)
         `)
         .order('created_at', { ascending: false });
 
@@ -304,7 +305,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         timestamp: new Date(post.created_at),
         likes: 0, // TODO: Calculate from post_interactions
         reposts: 0, // TODO: Calculate from post_interactions
-        comments: 0, // TODO: Calculate from comments
+        comments: Array.isArray(post.comments) ? post.comments.length : 0,
         isLiked: false, // TODO: Check user interactions
         isReposted: false, // TODO: Check user interactions
         isPinned: false, // TODO: Add to database schema
@@ -456,15 +457,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!user) return;
 
     try {
+      console.log('Creating post with data:', postData);
+      
       const { data, error } = await supabase
         .from('posts')
         .insert({
           content: postData.content,
           user_id: user.id,
-          character_id: postData.characterId,
+          character_id: postData.characterId || null,
           is_thread: postData.isThread || false,
-          thread_id: postData.threadId,
-          parent_post_id: postData.parentPostId,
+          thread_id: postData.threadId || null,
+          parent_post_id: postData.parentPostId || null,
           visibility: postData.visibility || 'public',
           tags: postData.tags || [],
           media_urls: postData.mediaUrls || []
@@ -472,12 +475,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      console.log('Post created successfully:', data);
 
       // Reload posts to get the new post with relations
       await loadPosts();
     } catch (error) {
       console.error('Error adding post:', error);
+      throw error;
     }
   };
 
@@ -1001,22 +1010,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Comment actions
   const addComment = async (postId: string, content: string, characterId?: string) => {
     try {
-      const { error } = await supabase
+      if (!user) return;
+
+      console.log('Adding comment:', { postId, content, characterId, userId: user.id });
+
+      const { data, error } = await supabase
         .from('comments')
         .insert({
           post_id: postId,
-          user_id: user?.id,
-          character_id: characterId,
+          user_id: user.id,
+          character_id: characterId || null,
           content
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error adding comment:', error);
+        throw error;
+      }
 
+      console.log('Comment added successfully:', data);
+
+      // Update post comment count locally
       setPosts(prev => prev.map(post => 
         post.id === postId ? { ...post, comments: post.comments + 1 } : post
       ));
+
+      // Reload posts to get updated comment count
+      await loadPosts();
     } catch (error) {
       console.error('Error adding comment:', error);
+      throw error;
     }
   };
 

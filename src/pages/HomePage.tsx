@@ -10,21 +10,30 @@ const HomePage: React.FC = () => {
   const { user } = useAuth();
   const [showCreatePost, setShowCreatePost] = useState(false);
 
-  const handleCreatePost = (content: string, character?: Character, mediaUrls?: string[]) => {
+  const handleCreatePost = async (content: string, character?: Character, mediaUrls?: string[]) => {
     if (!user) return;
 
-    addPost({
-      content,
-      characterId: character?.id,
-      character,
-      userId: user.id,
-      user,
-      isThread: false,
-      visibility: 'public',
-      tags: content.match(/#\w+/g) || [],
-      mediaUrls
-    });
-    setShowCreatePost(false);
+    try {
+      console.log('HomePage: Creating post with:', { content, character, mediaUrls });
+      
+      await addPost({
+        content,
+        characterId: character?.id,
+        character,
+        userId: user.id,
+        user,
+        isThread: false,
+        visibility: 'public',
+        tags: content.match(/#\w+/g) || [],
+        mediaUrls
+      });
+      
+      console.log('HomePage: Post created successfully');
+      setShowCreatePost(false);
+    } catch (error) {
+      console.error('HomePage: Error creating post:', error);
+      alert('Failed to create post. Please try again.');
+    }
   };
 
   const handleLike = (postId: string) => {

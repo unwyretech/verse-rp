@@ -34,6 +34,7 @@ const PostCard: React.FC<PostCardProps> = ({
   const [editContent, setEditContent] = useState(post.content);
   const [replyContent, setReplyContent] = useState('');
   const [selectedCharacter, setSelectedCharacter] = useState<string>('user');
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   // Use character data if available, otherwise fall back to user data
   const displayAvatar = post.character?.avatar || post.user?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
@@ -66,12 +67,21 @@ const PostCard: React.FC<PostCardProps> = ({
     setShowRepliesSection(true);
   };
 
-  const handleSubmitReply = (e: React.FormEvent) => {
+  const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (replyContent.trim()) {
+    if (!replyContent.trim() || submittingReply) return;
+
+    setSubmittingReply(true);
+    try {
       const characterId = selectedCharacter === 'user' ? undefined : selectedCharacter;
-      addComment(post.id, replyContent.trim(), characterId);
+      await addComment(post.id, replyContent.trim(), characterId);
       setReplyContent('');
+      console.log('Reply submitted successfully');
+    } catch (error) {
+      console.error('Error submitting reply:', error);
+      alert('Failed to submit reply. Please try again.');
+    } finally {
+      setSubmittingReply(false);
     }
   };
 
@@ -318,16 +328,17 @@ const PostCard: React.FC<PostCardProps> = ({
                   placeholder="Write your reply..."
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-purple-500 focus:outline-none resize-none text-sm"
                   rows={2}
+                  disabled={submittingReply}
                 />
               </div>
             </div>
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={!replyContent.trim()}
+                disabled={!replyContent.trim() || submittingReply}
                 className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1 rounded-lg transition-colors text-sm"
               >
-                Reply
+                {submittingReply ? 'Replying...' : 'Reply'}
               </button>
             </div>
           </form>
