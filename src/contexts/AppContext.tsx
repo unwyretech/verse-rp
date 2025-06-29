@@ -48,6 +48,7 @@ interface AppContextType {
   getChatMessages: (chatId: string) => Promise<Message[]>;
   markMessagesAsRead: (chatId: string) => Promise<void>;
   deleteChatForUser: (chatId: string, userId: string) => Promise<void>;
+  clearAllMessageNotifications: () => void;
   
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   markNotificationAsRead: (notificationId: string) => void;
@@ -455,13 +456,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markMessagesAsRead = async (chatId: string): Promise<void> => {
-    // Mock implementation
-    console.log('Marking messages as read for chat:', chatId);
+    // Mark messages as read for the specific chat
+    setChats(prev => prev.map(chat => {
+      if (chat.id === chatId && chat.lastMessage) {
+        return {
+          ...chat,
+          lastMessage: {
+            ...chat.lastMessage,
+            readBy: [...chat.lastMessage.readBy, 'current-user-id']
+          }
+        };
+      }
+      return chat;
+    }));
   };
 
   const deleteChatForUser = async (chatId: string, userId: string): Promise<void> => {
     // Remove chat from user's view
     setChats(prev => prev.filter(chat => chat.id !== chatId));
+  };
+
+  const clearAllMessageNotifications = () => {
+    // Mark all messages as read
+    setChats(prev => prev.map(chat => {
+      if (chat.lastMessage && !chat.lastMessage.readBy.includes('current-user-id')) {
+        return {
+          ...chat,
+          lastMessage: {
+            ...chat.lastMessage,
+            readBy: [...chat.lastMessage.readBy, 'current-user-id']
+          }
+        };
+      }
+      return chat;
+    }));
   };
 
   // Notification actions
@@ -620,6 +648,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       getChatMessages,
       markMessagesAsRead,
       deleteChatForUser,
+      clearAllMessageNotifications,
       
       addNotification,
       markNotificationAsRead,

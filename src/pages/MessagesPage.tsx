@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video, Upload, X, ArrowLeft, Menu } from 'lucide-react';
+import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video, Upload, X, ArrowLeft, Menu, CheckCheck } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Chat, Message } from '../types';
@@ -7,7 +7,7 @@ import SwipeableItem from '../components/SwipeableItem';
 import { uploadImage } from '../lib/supabase';
 
 const MessagesPage: React.FC = () => {
-  const { chats, sendMessage, createChat, allUsers, getChatMessages, markMessagesAsRead, deleteChatForUser } = useApp();
+  const { chats, sendMessage, createChat, allUsers, getChatMessages, markMessagesAsRead, deleteChatForUser, clearAllMessageNotifications } = useApp();
   const { user } = useAuth();
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messageText, setMessageText] = useState('');
@@ -23,13 +23,13 @@ const MessagesPage: React.FC = () => {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [chatList, setChatList] = useState<Chat[]>([]);
 
-  // Real-time refresh intervals - every 1 second
+  // Real-time refresh every 1 second for messages and chat list
   useEffect(() => {
     const refreshData = () => {
-      // Refresh chat list and message previews
+      // Refresh chat list and message previews every 1 second
       setChatList([...chats]);
       
-      // Refresh messages for selected chat
+      // Refresh messages for selected chat every 1 second
       if (selectedChat) {
         loadMessages(selectedChat.id);
       }
@@ -168,6 +168,18 @@ const MessagesPage: React.FC = () => {
     input.click();
   };
 
+  // Handle chat selection - clears message notifications for that chat
+  const handleChatSelect = (chat: Chat) => {
+    setSelectedChat(chat);
+    // Clear message notifications for this specific chat
+    markMessagesAsRead(chat.id);
+  };
+
+  // Handle clear all message notifications
+  const handleClearAllMessageNotifications = () => {
+    clearAllMessageNotifications();
+  };
+
   const filteredChats = chatList.filter(chat =>
     chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     chat.participants.some(p => {
@@ -228,6 +240,14 @@ const MessagesPage: React.FC = () => {
     return prevMessage.senderId !== message.senderId;
   };
 
+  // Count unread messages across all chats
+  const unreadMessageCount = chats.reduce((count, chat) => {
+    if (chat.lastMessage && !chat.lastMessage.readBy.includes(user?.id || '')) {
+      return count + 1;
+    }
+    return count;
+  }, 0);
+
   return (
     <>
       {/* Custom Mobile Menu Button - Only show when chat is NOT selected */}
@@ -245,13 +265,29 @@ const MessagesPage: React.FC = () => {
         <div className={`${isMobile ? (selectedChat ? 'hidden' : 'w-full') : 'w-80'} border-r border-gray-700/50 bg-black/20 ${isMobile ? 'absolute inset-0 z-10' : ''}`}>
           <div className="p-4 border-b border-gray-700/50">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">Messages</h2>
-              <button
-                onClick={() => setShowNewChat(true)}
-                className="p-2 bg-purple-600 hover:bg-purple-700 rounded-full transition-colors"
-              >
-                <Plus className="w-5 h-5 text-white" />
-              </button>
+              <div>
+                <h2 className="text-xl font-bold text-white">Messages</h2>
+                {unreadMessageCount > 0 && (
+                  <p className="text-purple-400 text-sm">{unreadMessageCount} unread messages</p>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                {unreadMessageCount > 0 && (
+                  <button
+                    onClick={handleClearAllMessageNotifications}
+                    className="p-2 text-purple-400 hover:bg-purple-400/10 rounded-full transition-colors"
+                    title="Clear all message notifications"
+                  >
+                    <CheckCheck className="w-5 h-5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowNewChat(true)}
+                  className="p-2 bg-purple-600 hover:bg-purple-700 rounded-full transition-colors"
+                >
+                  <Plus className="w-5 h-5 text-white" />
+                </button>
+              </div>
             </div>
             
             <div className="relative">
@@ -291,7 +327,7 @@ const MessagesPage: React.FC = () => {
                   }}
                 >
                   <button
-                    onClick={() => setSelectedChat(chat)}
+                    onClick={() => handleChatSelect(chat)}
                     className={`w-full p-4 text-left hover:bg-gray-800/30 transition-colors border-b border-gray-700/20 ${
                       selectedChat?.id === chat.id ? 'bg-purple-900/20' : ''
                     }`}
@@ -474,6 +510,17 @@ const MessagesPage: React.FC = () => {
                 <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-400 mb-2">Select a conversation</h3>
                 <p className="text-gray-500">Choose from your existing conversations or start a new one</p>
+                {unreadMessageCount > 0 && (
+                  <div className="mt-4">
+                    <button
+                      onClick={handleClearAllMessageNotifications}
+                      className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-full transition-colors mx-auto"
+                    >
+                      <CheckCheck className="w-4 h-4" />
+                      <span>Clear All Notifications ({unreadMessageCount})</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
