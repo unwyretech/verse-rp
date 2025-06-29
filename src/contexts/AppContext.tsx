@@ -50,6 +50,7 @@ interface AppContextType {
   markMessagesAsRead: (chatId: string) => Promise<void>;
   deleteChatForUser: (chatId: string, userId: string) => Promise<void>;
   clearAllMessageNotifications: () => void;
+  searchUsers: (query: string) => Promise<User[]>;
   
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   markNotificationAsRead: (notificationId: string) => void;
@@ -176,7 +177,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          *,
+          follower_count:get_follower_count(id),
+          following_count:get_following_count(id)
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -192,8 +197,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email: profile.email,
         twoFactorEnabled: profile.two_factor_enabled || false,
         characters: [],
-        followers: profile.followers || [],
-        following: profile.following || [],
+        followers: [], // Will be populated by follows table
+        following: [], // Will be populated by follows table
         createdAt: new Date(profile.created_at),
         role: profile.role || 'user',
         privacySettings: {
@@ -323,24 +328,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadChats = async () => {
     try {
+      if (!user) return;
+
       const { data: chatsData, error } = await supabase
         .from('chats')
         .select(`
           *,
-          chat_participants(user_id)
+          chat_participants!inner(user_id),
+          messages(
+            id,
+            content,
+            sender_id,
+            created_at,
+            read_by,
+            is_encrypted
+          )
         `)
+        .eq('chat_participants.user_id', user.id)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
 
-      const chats: Chat[] = chatsData.map(chat => ({
-        id: chat.id,
-        participants: chat.chat_participants?.map((p: any) => p.user_id) || [],
-        isGroup: chat.is_group || false,
-        name: chat.name,
-        createdAt: new Date(chat.created_at),
-        isEncrypted: chat.is_encrypted || true
-      }));
+      const chats: Chat[] = chatsData.map(chat => {
+        const lastMessage = chat.messages && chat.messages.length > 0 
+          ? chat.messages[chat.messages.length - 1] 
+          : null;
+
+        return {
+          id: chat.id,
+          participants: chat.chat_participants?.map((p: any) => p.user_id) || [],
+          isGroup: chat.is_group || false,
+          name: chat.name,
+          createdAt: new Date(chat.created_at),
+          isEncrypted: chat.is_encrypted || true,
+          lastMessage: lastMessage ? {
+            id: lastMessage.id,
+            content: lastMessage.is_encrypted ? '🔒 Encrypted message' : lastMessage.content,
+            senderId: lastMessage.sender_id,
+            chatId: chat.id,
+            timestamp: new Date(lastMessage.created_at),
+            isEncrypted: lastMessage.is_encrypted || true,
+            readBy: lastMessage.read_by || []
+          } : undefined
+        };
+      });
 
       setChats(chats);
     } catch (error) {
@@ -621,15 +652,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBookmarkedCharacters(prev => prev.filter(id => id !== characterId));
   };
 
-  // User actions
-  const followUser = (userId: string) => {
-    // Implementation for following users
-    console.log('Following user:', userId);
+  // User actions - simplified follow system
+  const followUser = async (userId: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('follows')
+        .insert({
+          follower_id: user.id,
+          following_id: userId
+        });
+
+      if (error) throw error;
+
+      // Update local state
+      setAllUsers(prev => prev.map(u => {
+        if (u.id === userId) {
+          return { ...u, followers: [...u.followers, user.id] };
+        }
+        if (u.id === user.id) {
+          return { ...u, following: [...u.following, userId] };
+        }
+        return u;
+      }));
+    } catch (error) {
+      console.error('Error following user:', error);
+    }
   };
 
-  const unfollowUser = (userId: string) => {
-    // Implementation for unfollowing users
-    console.log('Unfollowing user:', userId);
+  const unfollowUser = async (userId: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('follows')
+        .delete()
+        .eq('follower_id', user.id)
+        .eq('following_id', userId);
+
+      if (error) throw error;
+
+      // Update local state
+      setAllUsers(prev => prev.map(u => {
+        if (u.id === userId) {
+          return { ...u, followers: u.followers.filter(id => id !== user.id) };
+        }
+        if (u.id === user.id) {
+          return { ...u, following: u.following.filter(id => id !== userId) };
+        }
+        return u;
+      }));
+    } catch (error) {
+      console.error('Error unfollowing user:', error);
+    }
   };
 
   const bookmarkUser = (userId: string) => {
@@ -656,6 +732,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (error) throw error;
 
+      // Update chat's updated_at timestamp
+      await supabase
+        .from('chats')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', chatId);
+
       // Reload chats to update last message
       await loadChats();
     } catch (error) {
@@ -678,8 +760,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (chatError) throw chatError;
 
-      // Add participants
-      const participantInserts = participantIds.map(userId => ({
+      // Add participants including current user
+      const allParticipants = [...participantIds, user?.id].filter(Boolean);
+      const participantInserts = allParticipants.map(userId => ({
         chat_id: chatData.id,
         user_id: userId
       }));
@@ -692,14 +775,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const newChat: Chat = {
         id: chatData.id,
-        participants: participantIds,
+        participants: allParticipants as string[],
         isGroup,
         name,
         createdAt: new Date(chatData.created_at),
         isEncrypted: true
       };
 
-      setChats(prev => [...prev, newChat]);
+      setChats(prev => [newChat, ...prev]);
       return newChat;
     } catch (error) {
       console.error('Error creating chat:', error);
@@ -741,6 +824,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         chat_id_param: chatId,
         user_id_param: user.id
       });
+
+      // Update local chat state
+      setChats(prev => prev.map(chat => {
+        if (chat.id === chatId && chat.lastMessage) {
+          return {
+            ...chat,
+            lastMessage: {
+              ...chat.lastMessage,
+              readBy: [...chat.lastMessage.readBy, user.id]
+            }
+          };
+        }
+        return chat;
+      }));
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
@@ -763,7 +860,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const clearAllMessageNotifications = () => {
-    // Mark all messages as read
+    // Mark all messages as read locally
     setChats(prev => prev.map(chat => {
       if (chat.lastMessage && !chat.lastMessage.readBy.includes(user?.id || '')) {
         return {
@@ -776,6 +873,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return chat;
     }));
+  };
+
+  // Search users for messaging
+  const searchUsers = async (query: string): Promise<User[]> => {
+    try {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
+        .limit(10);
+
+      if (error) throw error;
+
+      return profiles.map(profile => ({
+        id: profile.id,
+        username: profile.username,
+        displayName: profile.display_name,
+        avatar: profile.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+        headerImage: profile.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+        bio: profile.bio || '',
+        writersTag: profile.writers_tag,
+        email: profile.email,
+        twoFactorEnabled: profile.two_factor_enabled || false,
+        characters: [],
+        followers: [],
+        following: [],
+        createdAt: new Date(profile.created_at),
+        role: profile.role || 'user',
+        privacySettings: {
+          profileVisibility: 'public',
+          messagePermissions: 'everyone',
+          tagNotifications: true,
+          directMessageNotifications: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error searching users:', error);
+      return [];
+    }
   };
 
   // Notification actions
@@ -938,11 +1074,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Relationship functions
   const getUserFollowers = async (userId: string): Promise<User[]> => {
-    return [];
+    try {
+      const { data: followsData, error } = await supabase
+        .from('follows')
+        .select(`
+          follower_id,
+          profiles:follower_id(*)
+        `)
+        .eq('following_id', userId);
+
+      if (error) throw error;
+
+      return followsData.map(follow => ({
+        id: follow.profiles.id,
+        username: follow.profiles.username,
+        displayName: follow.profiles.display_name,
+        avatar: follow.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+        headerImage: follow.profiles.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+        bio: follow.profiles.bio || '',
+        writersTag: follow.profiles.writers_tag,
+        email: follow.profiles.email,
+        twoFactorEnabled: follow.profiles.two_factor_enabled || false,
+        characters: [],
+        followers: [],
+        following: [],
+        createdAt: new Date(follow.profiles.created_at),
+        role: follow.profiles.role || 'user',
+        privacySettings: {
+          profileVisibility: 'public',
+          messagePermissions: 'everyone',
+          tagNotifications: true,
+          directMessageNotifications: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading followers:', error);
+      return [];
+    }
   };
 
   const getUserFollowing = async (userId: string): Promise<User[]> => {
-    return [];
+    try {
+      const { data: followsData, error } = await supabase
+        .from('follows')
+        .select(`
+          following_id,
+          profiles:following_id(*)
+        `)
+        .eq('follower_id', userId);
+
+      if (error) throw error;
+
+      return followsData.map(follow => ({
+        id: follow.profiles.id,
+        username: follow.profiles.username,
+        displayName: follow.profiles.display_name,
+        avatar: follow.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+        headerImage: follow.profiles.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+        bio: follow.profiles.bio || '',
+        writersTag: follow.profiles.writers_tag,
+        email: follow.profiles.email,
+        twoFactorEnabled: follow.profiles.two_factor_enabled || false,
+        characters: [],
+        followers: [],
+        following: [],
+        createdAt: new Date(follow.profiles.created_at),
+        role: follow.profiles.role || 'user',
+        privacySettings: {
+          profileVisibility: 'public',
+          messagePermissions: 'everyone',
+          tagNotifications: true,
+          directMessageNotifications: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading following:', error);
+      return [];
+    }
   };
 
   const getCharacterFollowers = async (characterId: string): Promise<User[]> => {
@@ -1022,6 +1230,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       markMessagesAsRead,
       deleteChatForUser,
       clearAllMessageNotifications,
+      searchUsers,
       
       addNotification,
       markNotificationAsRead,

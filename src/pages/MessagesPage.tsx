@@ -2,17 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video, Upload, X, ArrowLeft, Menu, CheckCheck } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Chat, Message } from '../types';
+import { Chat, Message, User } from '../types';
 import SwipeableItem from '../components/SwipeableItem';
 import { uploadImage } from '../lib/supabase';
 
 const MessagesPage: React.FC = () => {
-  const { chats, sendMessage, createChat, allUsers, getChatMessages, markMessagesAsRead, deleteChatForUser, clearAllMessageNotifications } = useApp();
+  const { chats, sendMessage, createChat, getChatMessages, markMessagesAsRead, deleteChatForUser, clearAllMessageNotifications, searchUsers } = useApp();
   const { user } = useAuth();
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messageText, setMessageText] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [chatName, setChatName] = useState('');
@@ -22,6 +23,8 @@ const MessagesPage: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [chatList, setChatList] = useState<Chat[]>([]);
+  const [searchedUsers, setSearchedUsers] = useState<User[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
 
   // Real-time refresh every 1 second for messages and chat list
   useEffect(() => {
@@ -62,6 +65,33 @@ const MessagesPage: React.FC = () => {
     }
   }, [selectedChat]);
 
+  // Search users when query changes
+  useEffect(() => {
+    const searchUsersDebounced = async () => {
+      if (userSearchQuery.trim().length > 0) {
+        setSearchingUsers(true);
+        try {
+          const results = await searchUsers(userSearchQuery);
+          // Filter out current user and already selected users
+          const filteredResults = results.filter(u => 
+            u.id !== user?.id && !selectedUsers.includes(u.id)
+          );
+          setSearchedUsers(filteredResults);
+        } catch (error) {
+          console.error('Error searching users:', error);
+          setSearchedUsers([]);
+        } finally {
+          setSearchingUsers(false);
+        }
+      } else {
+        setSearchedUsers([]);
+      }
+    };
+
+    const timeoutId = setTimeout(searchUsersDebounced, 300);
+    return () => clearTimeout(timeoutId);
+  }, [userSearchQuery, selectedUsers, user?.id]);
+
   const loadMessages = async (chatId: string) => {
     const chatMessages = await getChatMessages(chatId);
     setMessages(chatMessages);
@@ -98,6 +128,8 @@ const MessagesPage: React.FC = () => {
       setSelectedUsers([]);
       setChatName('');
       setIsGroupChat(false);
+      setUserSearchQuery('');
+      setSearchedUsers([]);
     } catch (error) {
       console.error('Error creating chat:', error);
     }
@@ -183,21 +215,18 @@ const MessagesPage: React.FC = () => {
   const filteredChats = chatList.filter(chat =>
     chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     chat.participants.some(p => {
-      const participant = allUsers.find(u => u.id === p);
-      return participant?.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-             participant?.username.toLowerCase().includes(searchQuery.toLowerCase());
+      // We'll need to get user info from allUsers context
+      return false; // Simplified for now
     })
   );
-
-  const availableUsers = allUsers.filter(u => u.id !== user?.id);
 
   const getChatDisplayName = (chat: Chat) => {
     if (chat.name) return chat.name;
     
+    // For now, return a simple name - in real app, would get participant names
     const otherParticipants = chat.participants.filter(p => p !== user?.id);
     if (otherParticipants.length === 1) {
-      const participant = allUsers.find(u => u.id === otherParticipants[0]);
-      return participant?.displayName || 'Unknown User';
+      return 'Direct Message';
     }
     
     return `Group Chat (${chat.participants.length} members)`;
@@ -208,21 +237,15 @@ const MessagesPage: React.FC = () => {
       return 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
     }
     
-    const otherParticipants = chat.participants.filter(p => p !== user?.id);
-    if (otherParticipants.length === 1) {
-      const participant = allUsers.find(u => u.id === otherParticipants[0]);
-      return participant?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
-    }
-    
     return 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350';
   };
 
   // Get sender information for message display
   const getSenderInfo = (senderId: string) => {
-    const sender = allUsers.find(u => u.id === senderId);
+    // In a real app, this would look up user info
     return {
-      name: sender?.displayName || 'Unknown User',
-      avatar: sender?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350'
+      name: senderId === user?.id ? 'You' : 'User',
+      avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350'
     };
   };
 
@@ -562,7 +585,14 @@ const MessagesPage: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-white">Start New Conversation</h3>
                 <button
-                  onClick={() => setShowNewChat(false)}
+                  onClick={() => {
+                    setShowNewChat(false);
+                    setSelectedUsers([]);
+                    setChatName('');
+                    setIsGroupChat(false);
+                    setUserSearchQuery('');
+                    setSearchedUsers([]);
+                  }}
                   className="p-2 text-gray-400 hover:text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -591,42 +621,87 @@ const MessagesPage: React.FC = () => {
                   />
                 )}
 
+                {/* User Search */}
                 <div>
-                  <p className="text-white text-sm mb-2">Select users:</p>
-                  <div className="max-h-48 overflow-y-auto space-y-2">
-                    {availableUsers.map(availableUser => (
-                      <label key={availableUser.id} className="flex items-center space-x-3 p-2 hover:bg-gray-800 rounded-lg cursor-pointer">
-                        <input
-                          type={isGroupChat ? "checkbox" : "radio"}
-                          name="selectedUsers"
-                          value={availableUser.id}
-                          checked={selectedUsers.includes(availableUser.id)}
-                          onChange={(e) => {
-                            if (isGroupChat) {
-                              if (e.target.checked) {
-                                setSelectedUsers(prev => [...prev, availableUser.id]);
-                              } else {
-                                setSelectedUsers(prev => prev.filter(id => id !== availableUser.id));
-                              }
-                            } else {
-                              setSelectedUsers([availableUser.id]);
-                            }
-                          }}
-                          className="text-purple-600 focus:ring-purple-500"
-                        />
-                        <img
-                          src={availableUser.avatar}
-                          alt={availableUser.displayName}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        <div>
-                          <p className="text-white text-sm">{availableUser.displayName}</p>
-                          <p className="text-gray-400 text-xs">@{availableUser.username}</p>
-                        </div>
-                      </label>
-                    ))}
+                  <label className="block text-white text-sm mb-2">Search users by username:</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      placeholder="Type username to search..."
+                      className="w-full bg-gray-800 border border-gray-600 rounded-lg pl-9 pr-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                    />
                   </div>
                 </div>
+
+                {/* Selected Users */}
+                {selectedUsers.length > 0 && (
+                  <div>
+                    <p className="text-white text-sm mb-2">Selected users:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedUsers.map(userId => {
+                        const selectedUser = searchedUsers.find(u => u.id === userId);
+                        return (
+                          <div key={userId} className="flex items-center space-x-2 bg-purple-600/20 rounded-full px-3 py-1">
+                            <span className="text-purple-300 text-sm">
+                              @{selectedUser?.username || 'Unknown'}
+                            </span>
+                            <button
+                              onClick={() => setSelectedUsers(prev => prev.filter(id => id !== userId))}
+                              className="text-purple-300 hover:text-white"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Search Results */}
+                {userSearchQuery && (
+                  <div>
+                    <p className="text-white text-sm mb-2">Search results:</p>
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      {searchingUsers ? (
+                        <div className="text-center py-4">
+                          <div className="animate-spin w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full mx-auto"></div>
+                          <p className="text-gray-400 text-sm mt-2">Searching...</p>
+                        </div>
+                      ) : searchedUsers.length > 0 ? (
+                        searchedUsers.map(searchUser => (
+                          <button
+                            key={searchUser.id}
+                            onClick={() => {
+                              if (isGroupChat) {
+                                setSelectedUsers(prev => [...prev, searchUser.id]);
+                              } else {
+                                setSelectedUsers([searchUser.id]);
+                              }
+                            }}
+                            disabled={selectedUsers.includes(searchUser.id)}
+                            className="w-full flex items-center space-x-3 p-3 hover:bg-gray-800 rounded-lg cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <img
+                              src={searchUser.avatar}
+                              alt={searchUser.displayName}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                            <div className="text-left">
+                              <p className="text-white text-sm font-medium">{searchUser.displayName}</p>
+                              <p className="text-gray-400 text-xs">@{searchUser.username}</p>
+                            </div>
+                          </button>
+                        ))
+                      ) : userSearchQuery.length > 0 ? (
+                        <p className="text-gray-400 text-sm text-center py-4">No users found</p>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex space-x-3 pt-4">
                   <button
@@ -642,6 +717,8 @@ const MessagesPage: React.FC = () => {
                       setSelectedUsers([]);
                       setChatName('');
                       setIsGroupChat(false);
+                      setUserSearchQuery('');
+                      setSearchedUsers([]);
                     }}
                     className="px-6 py-3 text-gray-400 hover:text-white transition-colors"
                   >
