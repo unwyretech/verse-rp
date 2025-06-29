@@ -8,9 +8,15 @@ interface SidebarProps {
   unreadNotifications: number;
   isOpen?: boolean;
   onToggle?: () => void;
+  hideOnMobile?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ 
+  unreadNotifications, 
+  isOpen = true, 
+  onToggle,
+  hideOnMobile = false 
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -35,13 +41,15 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      <button
-        onClick={onToggle}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-gray-900 rounded-full border border-gray-700"
-      >
-        {isOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
-      </button>
+      {/* Mobile Menu Button - Hide when hideOnMobile is true */}
+      {!hideOnMobile && (
+        <button
+          onClick={onToggle}
+          className="md:hidden fixed top-4 left-4 z-50 p-2 bg-gray-900 rounded-full border border-gray-700"
+        >
+          {isOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
+        </button>
+      )}
 
       {/* Sidebar */}
       <div className={`
@@ -132,7 +140,7 @@ const Sidebar: React.FC<SidebarProps> = ({ unreadNotifications, isOpen = true, o
       </div>
 
       {/* Mobile Overlay */}
-      {isOpen && (
+      {isOpen && !hideOnMobile && (
         <div 
           className="md:hidden fixed inset-0 bg-black/50 z-30"
           onClick={onToggle}

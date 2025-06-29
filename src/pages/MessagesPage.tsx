@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video, Upload, X, ArrowLeft } from 'lucide-react';
+import { Search, Plus, Send, Lock, Users, MoreHorizontal, Archive, Trash2, Image, Video, Upload, X, ArrowLeft, Menu } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Chat, Message } from '../types';
@@ -20,6 +20,7 @@ const MessagesPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   // Real-time refresh intervals
   useEffect(() => {
@@ -203,6 +204,16 @@ const MessagesPage: React.FC = () => {
 
   return (
     <>
+      {/* Custom Mobile Menu Button - Only show when chat is NOT selected */}
+      {isMobile && !selectedChat && (
+        <button
+          onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+          className="fixed top-4 left-4 z-50 p-2 bg-gray-900 rounded-full border border-gray-700"
+        >
+          {showMobileSidebar ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
+        </button>
+      )}
+
       <div className="min-h-screen bg-black/10 backdrop-blur-sm flex relative">
         {/* Chat List - Hidden when chat is selected on mobile */}
         <div className={`${isMobile ? (selectedChat ? 'hidden' : 'w-full') : 'w-80'} border-r border-gray-700/50 bg-black/20 ${isMobile ? 'absolute inset-0 z-10' : ''}`}>
