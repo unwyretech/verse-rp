@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 import { User, Character, Post, Chat, Message, Notification } from '../types';
 
 interface AppContextType {
@@ -86,6 +87,7 @@ export const useApp = () => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isAuthenticated } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -95,6 +97,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [bookmarkedCharacters, setBookmarkedCharacters] = useState<string[]>([]);
   const [bookmarkedUsers, setBookmarkedUsers] = useState<string[]>([]);
   const [selectedCharacter, setSelectedCharacterState] = useState<Character | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Persistent character selection
   const setSelectedCharacter = (character: Character | null) => {
@@ -136,183 +139,340 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [characters, selectedCharacter]);
 
-  const unreadNotifications = notifications.filter(n => !n.read).length;
-  const unreadMessages = chats.reduce((count, chat) => {
-    if (chat.lastMessage && !chat.lastMessage.readBy.includes('current-user-id')) {
-      return count + 1;
-    }
-    return count;
-  }, 0);
-
-  // Initialize with sample data
+  // Load data from database when user is authenticated
   useEffect(() => {
-    initializeSampleData();
-  }, []);
+    if (isAuthenticated && user) {
+      loadAllData();
+      
+      // Set up real-time subscriptions
+      const interval = setInterval(() => {
+        loadAllData();
+      }, 1000); // Refresh every second
 
-  const initializeSampleData = () => {
-    // Sample users
-    const sampleUsers: User[] = [
-      {
-        id: 'user-1',
-        username: 'alexwriter',
-        displayName: 'Alex Thompson',
-        avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
-        headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
-        bio: 'Fantasy writer and world builder. Creating epic adventures one story at a time.',
-        writersTag: 'fantasy',
-        email: 'alex@example.com',
-        twoFactorEnabled: false,
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, user]);
+
+  const loadAllData = async () => {
+    if (!user || loading) return;
+    
+    setLoading(true);
+    try {
+      await Promise.all([
+        loadUsers(),
+        loadCharacters(),
+        loadPosts(),
+        loadChats(),
+        loadNotifications()
+      ]);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const users: User[] = profiles.map(profile => ({
+        id: profile.id,
+        username: profile.username,
+        displayName: profile.display_name,
+        avatar: profile.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+        headerImage: profile.header_image_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+        bio: profile.bio || '',
+        writersTag: profile.writers_tag,
+        email: profile.email,
+        twoFactorEnabled: profile.two_factor_enabled || false,
         characters: [],
-        followers: [],
-        following: [],
-        createdAt: new Date('2024-01-15'),
+        followers: profile.followers || [],
+        following: profile.following || [],
+        createdAt: new Date(profile.created_at),
+        role: profile.role || 'user',
         privacySettings: {
           profileVisibility: 'public',
           messagePermissions: 'everyone',
           tagNotifications: true,
           directMessageNotifications: true
         }
-      },
-      {
-        id: 'user-2',
-        username: 'scifimaster',
-        displayName: 'Jordan Clarke',
-        avatar: 'https://images.pexels.com/photos/1382734/pexels-photo-1382734.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
-        headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
-        bio: 'Science fiction enthusiast exploring the boundaries of imagination.',
-        writersTag: 'scifi',
-        email: 'jordan@example.com',
-        twoFactorEnabled: true,
-        characters: [],
-        followers: [],
-        following: [],
-        createdAt: new Date('2024-02-01'),
-        privacySettings: {
-          profileVisibility: 'public',
-          messagePermissions: 'followers',
-          tagNotifications: true,
-          directMessageNotifications: false
-        }
-      }
-    ];
+      }));
 
-    // Sample characters
-    const sampleCharacters: Character[] = [
-      {
-        id: 'char-1',
-        username: 'aragorn_ranger',
-        name: 'Aragorn',
-        title: 'Ranger of the North',
-        avatar: 'https://images.pexels.com/photos/1382734/pexels-photo-1382734.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
-        headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
-        bio: 'A skilled ranger and heir to the throne of Gondor, wandering the wild lands to protect the innocent.',
-        universe: 'Middle-earth',
-        verseTag: 'LOTR',
-        traits: ['Brave', 'Noble', 'Skilled Fighter', 'Natural Leader'],
-        userId: 'user-1',
-        customColor: '#2d5a27',
-        customFont: 'Cinzel',
-        followers: [],
-        following: [],
-        createdAt: new Date('2024-01-20')
-      },
-      {
-        id: 'char-2',
-        username: 'spock_vulcan',
-        name: 'Spock',
-        title: 'Science Officer',
-        avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
-        headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
-        bio: 'Half-human, half-Vulcan officer aboard the USS Enterprise, dedicated to logic and scientific discovery.',
-        universe: 'Star Trek',
-        verseTag: 'StarTrek',
-        traits: ['Logical', 'Intelligent', 'Loyal', 'Curious'],
-        userId: 'user-2',
-        customColor: '#1e3a8a',
-        customFont: 'Orbitron',
-        followers: [],
-        following: [],
-        createdAt: new Date('2024-02-05')
-      }
-    ];
-
-    // Sample posts
-    const samplePosts: Post[] = [
-      {
-        id: 'post-1',
-        content: 'The path ahead is treacherous, but we must press on. The fate of Middle-earth depends on our courage. #LOTR #Adventure',
-        characterId: 'char-1',
-        character: sampleCharacters[0],
-        userId: 'user-1',
-        user: sampleUsers[0],
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        likes: 15,
-        reposts: 3,
-        comments: 7,
-        isLiked: false,
-        isReposted: false,
-        isThread: false,
-        visibility: 'public',
-        tags: ['LOTR', 'Adventure']
-      },
-      {
-        id: 'post-2',
-        content: 'Fascinating. The quantum mechanics of this universe continue to defy conventional understanding. Further analysis is required. #StarTrek #Science',
-        characterId: 'char-2',
-        character: sampleCharacters[1],
-        userId: 'user-2',
-        user: sampleUsers[1],
-        timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
-        likes: 22,
-        reposts: 5,
-        comments: 12,
-        isLiked: true,
-        isReposted: false,
-        isThread: false,
-        visibility: 'public',
-        tags: ['StarTrek', 'Science']
-      }
-    ];
-
-    setAllUsers(sampleUsers);
-    setCharacters(sampleCharacters);
-    setPosts(samplePosts);
+      setAllUsers(users);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
   };
+
+  const loadCharacters = async () => {
+    try {
+      const { data: charactersData, error } = await supabase
+        .from('characters')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const characters: Character[] = charactersData.map(char => ({
+        id: char.id,
+        username: char.username,
+        name: char.name,
+        title: char.title,
+        avatar: char.avatar_url || 'https://images.pexels.com/photos/1382734/pexels-photo-1382734.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+        headerImage: char.header_url || 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+        bio: char.bio,
+        universe: char.universe,
+        verseTag: char.verse_tag,
+        traits: char.traits || [],
+        userId: char.user_id,
+        customColor: char.custom_color || '#8b5cf6',
+        customFont: char.custom_font || 'Inter',
+        followers: char.followers || [],
+        following: char.following || [],
+        createdAt: new Date(char.created_at)
+      }));
+
+      setCharacters(characters);
+    } catch (error) {
+      console.error('Error loading characters:', error);
+    }
+  };
+
+  const loadPosts = async () => {
+    try {
+      const { data: postsData, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles:user_id(id, username, display_name, avatar_url),
+          characters:character_id(id, username, name, title, avatar_url, universe, verse_tag)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const posts: Post[] = postsData.map(post => ({
+        id: post.id,
+        content: post.content,
+        characterId: post.character_id,
+        character: post.characters ? {
+          id: post.characters.id,
+          username: post.characters.username,
+          name: post.characters.name,
+          title: post.characters.title,
+          avatar: post.characters.avatar_url || 'https://images.pexels.com/photos/1382734/pexels-photo-1382734.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+          headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+          bio: '',
+          universe: post.characters.universe,
+          verseTag: post.characters.verse_tag,
+          traits: [],
+          userId: post.user_id,
+          customColor: '#8b5cf6',
+          customFont: 'Inter',
+          followers: [],
+          following: [],
+          createdAt: new Date()
+        } : undefined,
+        userId: post.user_id,
+        user: post.profiles ? {
+          id: post.profiles.id,
+          username: post.profiles.username,
+          displayName: post.profiles.display_name,
+          avatar: post.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+          headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+          bio: '',
+          writersTag: '',
+          twoFactorEnabled: false,
+          characters: [],
+          followers: [],
+          following: [],
+          createdAt: new Date(),
+          privacySettings: {
+            profileVisibility: 'public',
+            messagePermissions: 'everyone',
+            tagNotifications: true,
+            directMessageNotifications: true
+          }
+        } : undefined,
+        timestamp: new Date(post.created_at),
+        likes: 0, // TODO: Calculate from post_interactions
+        reposts: 0, // TODO: Calculate from post_interactions
+        comments: 0, // TODO: Calculate from comments
+        isLiked: false, // TODO: Check user interactions
+        isReposted: false, // TODO: Check user interactions
+        isPinned: false, // TODO: Add to database schema
+        isThread: post.is_thread || false,
+        threadId: post.thread_id,
+        parentPostId: post.parent_post_id,
+        visibility: post.visibility || 'public',
+        tags: post.tags || [],
+        mediaUrls: post.media_urls || []
+      }));
+
+      setPosts(posts);
+    } catch (error) {
+      console.error('Error loading posts:', error);
+    }
+  };
+
+  const loadChats = async () => {
+    try {
+      const { data: chatsData, error } = await supabase
+        .from('chats')
+        .select(`
+          *,
+          chat_participants(user_id)
+        `)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+
+      const chats: Chat[] = chatsData.map(chat => ({
+        id: chat.id,
+        participants: chat.chat_participants?.map((p: any) => p.user_id) || [],
+        isGroup: chat.is_group || false,
+        name: chat.name,
+        createdAt: new Date(chat.created_at),
+        isEncrypted: chat.is_encrypted || true
+      }));
+
+      setChats(chats);
+    } catch (error) {
+      console.error('Error loading chats:', error);
+    }
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const { data: notificationsData, error } = await supabase
+        .from('notifications')
+        .select(`
+          *,
+          profiles:from_user_id(id, username, display_name, avatar_url)
+        `)
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const notifications: Notification[] = notificationsData.map(notif => ({
+        id: notif.id,
+        type: notif.type,
+        userId: notif.user_id,
+        fromUserId: notif.from_user_id,
+        fromUser: notif.profiles ? {
+          id: notif.profiles.id,
+          username: notif.profiles.username,
+          displayName: notif.profiles.display_name,
+          avatar: notif.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+          headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+          bio: '',
+          writersTag: '',
+          twoFactorEnabled: false,
+          characters: [],
+          followers: [],
+          following: [],
+          createdAt: new Date(),
+          privacySettings: {
+            profileVisibility: 'public',
+            messagePermissions: 'everyone',
+            tagNotifications: true,
+            directMessageNotifications: true
+          }
+        } : undefined,
+        postId: notif.post_id,
+        message: notif.message,
+        timestamp: new Date(notif.created_at),
+        read: notif.read || false
+      }));
+
+      setNotifications(notifications);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+
+  const unreadNotifications = notifications.filter(n => !n.read).length;
+  const unreadMessages = chats.reduce((count, chat) => {
+    if (chat.lastMessage && !chat.lastMessage.readBy.includes(user?.id || '')) {
+      return count + 1;
+    }
+    return count;
+  }, 0);
 
   // Post actions
-  const addPost = (postData: Partial<Post>) => {
-    const newPost: Post = {
-      id: Date.now().toString(),
-      content: postData.content || '',
-      characterId: postData.characterId,
-      character: postData.character,
-      userId: postData.userId || '',
-      user: postData.user,
-      timestamp: new Date(),
-      likes: 0,
-      reposts: 0,
-      comments: 0,
-      isLiked: false,
-      isReposted: false,
-      isThread: postData.isThread || false,
-      threadId: postData.threadId,
-      parentPostId: postData.parentPostId,
-      visibility: postData.visibility || 'public',
-      tags: postData.tags || [],
-      mediaUrls: postData.mediaUrls || []
-    };
+  const addPost = async (postData: Partial<Post>) => {
+    if (!user) return;
 
-    setPosts(prev => [newPost, ...prev]);
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({
+          content: postData.content,
+          user_id: user.id,
+          character_id: postData.characterId,
+          is_thread: postData.isThread || false,
+          thread_id: postData.threadId,
+          parent_post_id: postData.parentPostId,
+          visibility: postData.visibility || 'public',
+          tags: postData.tags || [],
+          media_urls: postData.mediaUrls || []
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Reload posts to get the new post with relations
+      await loadPosts();
+    } catch (error) {
+      console.error('Error adding post:', error);
+    }
   };
 
-  const updatePost = (postId: string, updates: Partial<Post>) => {
-    setPosts(prev => prev.map(post => 
-      post.id === postId ? { ...post, ...updates } : post
-    ));
+  const updatePost = async (postId: string, updates: Partial<Post>) => {
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({
+          content: updates.content,
+          visibility: updates.visibility,
+          tags: updates.tags,
+          media_urls: updates.mediaUrls,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      // Update local state
+      setPosts(prev => prev.map(post => 
+        post.id === postId ? { ...post, ...updates } : post
+      ));
+    } catch (error) {
+      console.error('Error updating post:', error);
+    }
   };
 
-  const deletePost = (postId: string) => {
-    setPosts(prev => prev.filter(post => post.id !== postId));
+  const deletePost = async (postId: string) => {
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      setPosts(prev => prev.filter(post => post.id !== postId));
+    } catch (error) {
+      console.error('Error deleting post:', error);
+    }
   };
 
   const likePost = (postId: string) => {
@@ -362,21 +522,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Character actions
-  const addCharacter = (character: Character) => {
-    setCharacters(prev => [...prev, character]);
+  const addCharacter = async (character: Character) => {
+    try {
+      const { data, error } = await supabase
+        .from('characters')
+        .insert({
+          username: character.username,
+          name: character.name,
+          title: character.title,
+          avatar_url: character.avatar,
+          header_url: character.headerImage,
+          bio: character.bio,
+          universe: character.universe,
+          verse_tag: character.verseTag,
+          traits: character.traits,
+          user_id: character.userId,
+          custom_color: character.customColor,
+          custom_font: character.customFont,
+          followers: character.followers,
+          following: character.following
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Reload characters to get the new character
+      await loadCharacters();
+    } catch (error) {
+      console.error('Error adding character:', error);
+    }
   };
 
-  const updateCharacter = (characterId: string, updates: Partial<Character>) => {
-    setCharacters(prev => prev.map(char => 
-      char.id === characterId ? { ...char, ...updates } : char
-    ));
+  const updateCharacter = async (characterId: string, updates: Partial<Character>) => {
+    try {
+      const { error } = await supabase
+        .from('characters')
+        .update({
+          username: updates.username,
+          name: updates.name,
+          title: updates.title,
+          avatar_url: updates.avatar,
+          header_url: updates.headerImage,
+          bio: updates.bio,
+          universe: updates.universe,
+          verse_tag: updates.verseTag,
+          traits: updates.traits,
+          custom_color: updates.customColor,
+          custom_font: updates.customFont,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', characterId);
+
+      if (error) throw error;
+
+      setCharacters(prev => prev.map(char => 
+        char.id === characterId ? { ...char, ...updates } : char
+      ));
+    } catch (error) {
+      console.error('Error updating character:', error);
+    }
   };
 
-  const deleteCharacter = (characterId: string) => {
-    setCharacters(prev => prev.filter(char => char.id !== characterId));
-    // Clear selected character if it was deleted
-    if (selectedCharacter?.id === characterId) {
-      setSelectedCharacter(null);
+  const deleteCharacter = async (characterId: string) => {
+    try {
+      const { error } = await supabase
+        .from('characters')
+        .delete()
+        .eq('id', characterId);
+
+      if (error) throw error;
+
+      setCharacters(prev => prev.filter(char => char.id !== characterId));
+      // Clear selected character if it was deleted
+      if (selectedCharacter?.id === characterId) {
+        setSelectedCharacter(null);
+      }
+    } catch (error) {
+      console.error('Error deleting character:', error);
     }
   };
 
@@ -419,72 +642,135 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Chat actions
   const sendMessage = async (chatId: string, content: string, senderId: string, mediaUrl?: string): Promise<void> => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content,
-      senderId,
-      chatId,
-      timestamp: new Date(),
-      isEncrypted: true,
-      readBy: [senderId],
-      mediaUrl
-    };
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          chat_id: chatId,
+          sender_id: senderId,
+          content,
+          media_url: mediaUrl,
+          is_encrypted: true,
+          read_by: [senderId]
+        });
 
-    // Update chat with last message
-    setChats(prev => prev.map(chat => 
-      chat.id === chatId ? { ...chat, lastMessage: newMessage } : chat
-    ));
+      if (error) throw error;
+
+      // Reload chats to update last message
+      await loadChats();
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
 
   const createChat = async (participantIds: string[], isGroup: boolean, name?: string): Promise<Chat> => {
-    const newChat: Chat = {
-      id: Date.now().toString(),
-      participants: participantIds,
-      isGroup,
-      name,
-      createdAt: new Date(),
-      isEncrypted: true
-    };
+    try {
+      const { data: chatData, error: chatError } = await supabase
+        .from('chats')
+        .insert({
+          name,
+          is_group: isGroup,
+          created_by: user?.id,
+          is_encrypted: true
+        })
+        .select()
+        .single();
 
-    setChats(prev => [...prev, newChat]);
-    return newChat;
+      if (chatError) throw chatError;
+
+      // Add participants
+      const participantInserts = participantIds.map(userId => ({
+        chat_id: chatData.id,
+        user_id: userId
+      }));
+
+      const { error: participantError } = await supabase
+        .from('chat_participants')
+        .insert(participantInserts);
+
+      if (participantError) throw participantError;
+
+      const newChat: Chat = {
+        id: chatData.id,
+        participants: participantIds,
+        isGroup,
+        name,
+        createdAt: new Date(chatData.created_at),
+        isEncrypted: true
+      };
+
+      setChats(prev => [...prev, newChat]);
+      return newChat;
+    } catch (error) {
+      console.error('Error creating chat:', error);
+      throw error;
+    }
   };
 
   const getChatMessages = async (chatId: string): Promise<Message[]> => {
-    // Mock implementation - in real app, this would fetch from database
-    return [];
+    try {
+      const { data: messagesData, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      return messagesData.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        senderId: msg.sender_id,
+        chatId: msg.chat_id,
+        timestamp: new Date(msg.created_at),
+        isEncrypted: msg.is_encrypted || true,
+        readBy: msg.read_by || [],
+        mediaUrl: msg.media_url
+      }));
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      return [];
+    }
   };
 
   const markMessagesAsRead = async (chatId: string): Promise<void> => {
-    // Mark messages as read for the specific chat
-    setChats(prev => prev.map(chat => {
-      if (chat.id === chatId && chat.lastMessage) {
-        return {
-          ...chat,
-          lastMessage: {
-            ...chat.lastMessage,
-            readBy: [...chat.lastMessage.readBy, 'current-user-id']
-          }
-        };
-      }
-      return chat;
-    }));
+    if (!user) return;
+
+    try {
+      await supabase.rpc('mark_messages_as_read', {
+        chat_id_param: chatId,
+        user_id_param: user.id
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
   };
 
   const deleteChatForUser = async (chatId: string, userId: string): Promise<void> => {
-    // Remove chat from user's view
-    setChats(prev => prev.filter(chat => chat.id !== chatId));
+    try {
+      const { error } = await supabase
+        .from('chat_participants')
+        .delete()
+        .eq('chat_id', chatId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      setChats(prev => prev.filter(chat => chat.id !== chatId));
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+    }
   };
 
   const clearAllMessageNotifications = () => {
     // Mark all messages as read
     setChats(prev => prev.map(chat => {
-      if (chat.lastMessage && !chat.lastMessage.readBy.includes('current-user-id')) {
+      if (chat.lastMessage && !chat.lastMessage.readBy.includes(user?.id || '')) {
         return {
           ...chat,
           lastMessage: {
             ...chat.lastMessage,
-            readBy: [...chat.lastMessage.readBy, 'current-user-id']
+            readBy: [...chat.lastMessage.readBy, user?.id || '']
           }
         };
       }
@@ -504,21 +790,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => [newNotification, ...prev]);
   };
 
-  const markNotificationAsRead = (notificationId: string) => {
-    setNotifications(prev => prev.map(notification => 
-      notification.id === notificationId ? { ...notification, read: true } : notification
-    ));
+  const markNotificationAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notificationId);
+
+      if (error) throw error;
+
+      setNotifications(prev => prev.map(notification => 
+        notification.id === notificationId ? { ...notification, read: true } : notification
+      ));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
-  const clearAllNotifications = () => {
-    setNotifications([]);
+  const clearAllNotifications = async () => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      setNotifications([]);
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+    }
   };
 
   // Comment actions
-  const addComment = (postId: string, content: string, characterId?: string) => {
-    setPosts(prev => prev.map(post => 
-      post.id === postId ? { ...post, comments: post.comments + 1 } : post
-    ));
+  const addComment = async (postId: string, content: string, characterId?: string) => {
+    try {
+      const { error } = await supabase
+        .from('comments')
+        .insert({
+          post_id: postId,
+          user_id: user?.id,
+          character_id: characterId,
+          content
+        });
+
+      if (error) throw error;
+
+      setPosts(prev => prev.map(post => 
+        post.id === postId ? { ...post, comments: post.comments + 1 } : post
+      ));
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
   };
 
   // Search and recommendations
@@ -567,17 +890,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteUserAdmin = async (userId: string): Promise<void> => {
-    setAllUsers(prev => prev.filter(user => user.id !== userId));
+    try {
+      const { error } = await supabase.rpc('admin_delete_user', {
+        target_user_id: userId
+      });
+
+      if (error) throw error;
+
+      setAllUsers(prev => prev.filter(user => user.id !== userId));
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
   };
 
   const resetPasswordAdmin = async (userId: string, newPassword: string): Promise<void> => {
-    console.log('Resetting password for user:', userId);
+    try {
+      const { error } = await supabase.rpc('admin_reset_password', {
+        target_user_id: userId,
+        new_password: newPassword
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      throw error;
+    }
   };
 
   const updateUserRoleAdmin = async (userId: string, role: 'user' | 'admin'): Promise<void> => {
-    setAllUsers(prev => prev.map(user => 
-      user.id === userId ? { ...user, role } : user
-    ));
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setAllUsers(prev => prev.map(user => 
+        user.id === userId ? { ...user, role } : user
+      ));
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      throw error;
+    }
   };
 
   // Relationship functions
@@ -598,7 +954,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const getPostComments = async (postId: string): Promise<any[]> => {
-    return [];
+    try {
+      const { data: commentsData, error } = await supabase
+        .from('comments')
+        .select(`
+          *,
+          profiles:user_id(id, username, display_name, avatar_url),
+          characters:character_id(id, username, name, avatar_url)
+        `)
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      return commentsData || [];
+    } catch (error) {
+      console.error('Error loading comments:', error);
+      return [];
+    }
   };
 
   return (
