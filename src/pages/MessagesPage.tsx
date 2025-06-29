@@ -7,7 +7,7 @@ import SwipeableItem from '../components/SwipeableItem';
 import { uploadImage } from '../lib/supabase';
 
 const MessagesPage: React.FC = () => {
-  const { chats, sendMessage, createChat, allUsers, getChatMessages, markMessagesAsRead } = useApp();
+  const { chats, sendMessage, createChat, allUsers, getChatMessages, markMessagesAsRead, deleteChatForUser } = useApp();
   const { user } = useAuth();
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messageText, setMessageText] = useState('');
@@ -108,12 +108,14 @@ const MessagesPage: React.FC = () => {
     setShowDeleteConfirm(chatId);
   };
 
-  const confirmDeleteChat = (chatId: string) => {
-    console.log('Delete chat:', chatId);
-    // In a real app, this would delete the chat
-    setShowDeleteConfirm(null);
-    if (selectedChat?.id === chatId) {
-      setSelectedChat(null);
+  const confirmDeleteChat = async (chatId: string) => {
+    if (user) {
+      // Delete chat only for the current user
+      await deleteChatForUser(chatId, user.id);
+      setShowDeleteConfirm(null);
+      if (selectedChat?.id === chatId) {
+        setSelectedChat(null);
+      }
     }
   };
 
@@ -423,13 +425,16 @@ const MessagesPage: React.FC = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-gray-900 rounded-2xl border border-gray-700/50 p-6 mx-4 max-w-sm w-full">
             <h3 className="text-lg font-bold text-white mb-4">Delete Conversation</h3>
-            <p className="text-gray-300 mb-6">Are you sure you want to delete this conversation? This action cannot be undone.</p>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to delete this conversation? This will only remove it from your view. 
+              Other participants will still be able to see the conversation.
+            </p>
             <div className="flex space-x-3">
               <button
                 onClick={() => confirmDeleteChat(showDeleteConfirm)}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition-colors"
               >
-                Delete
+                Delete for Me
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(null)}

@@ -9,7 +9,7 @@ interface CreateCharacterProps {
 }
 
 const CreateCharacter: React.FC<CreateCharacterProps> = ({ onClose }) => {
-  const { addCharacter } = useApp();
+  const { addCharacter, characters } = useApp();
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     username: '',
@@ -22,10 +22,21 @@ const CreateCharacter: React.FC<CreateCharacterProps> = ({ onClose }) => {
     customColor: '#8b5cf6',
     customFont: 'Inter'
   });
+  const [error, setError] = useState('');
+
+  // Check character limit
+  const userCharacters = characters.filter(char => char.userId === user?.id);
+  const characterLimit = 10;
+  const canCreateCharacter = userCharacters.length < characterLimit;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    if (!canCreateCharacter) {
+      setError(`You can only create up to ${characterLimit} characters.`);
+      return;
+    }
 
     const newCharacter: Character = {
       id: Date.now().toString(),
@@ -41,6 +52,8 @@ const CreateCharacter: React.FC<CreateCharacterProps> = ({ onClose }) => {
       userId: user.id,
       customColor: formData.customColor,
       customFont: formData.customFont,
+      followers: [],
+      following: [],
       createdAt: new Date()
     };
 
@@ -54,11 +67,41 @@ const CreateCharacter: React.FC<CreateCharacterProps> = ({ onClose }) => {
     'Courier New', 'Georgia'
   ];
 
+  if (!canCreateCharacter) {
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="bg-gray-900 rounded-2xl border border-gray-700/50 p-6 mx-4 max-w-md w-full">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <X className="w-8 h-8 text-red-400" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">Character Limit Reached</h3>
+            <p className="text-gray-300 mb-6">
+              You have reached the maximum limit of {characterLimit} characters. 
+              You currently have {userCharacters.length} characters.
+            </p>
+            <button
+              onClick={onClose}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-gray-900 rounded-2xl border border-gray-700/50 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gray-900 border-b border-gray-700/50 p-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">Create New Character</h2>
+          <div>
+            <h2 className="text-lg font-bold text-white">Create New Character</h2>
+            <p className="text-gray-400 text-sm">
+              {userCharacters.length}/{characterLimit} characters created
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-800 rounded-full transition-colors"
@@ -68,6 +111,12 @@ const CreateCharacter: React.FC<CreateCharacterProps> = ({ onClose }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {error && (
+            <div className="p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">

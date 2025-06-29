@@ -69,8 +69,8 @@ const ExplorePage: React.FC = () => {
     .filter((tag, index, arr) => arr.indexOf(tag) === index)
     .slice(0, 8);
 
-  // Get unique writers
-  const uniqueWriters = allUsers.filter(writer => writer.id !== user?.id).slice(0, 10);
+  // Show ALL writers, not just those the user follows
+  const allWriters = allUsers.filter(writer => writer.id !== user?.id);
 
   const handleLike = (postId: string) => {
     likePost(postId);
@@ -242,7 +242,7 @@ const ExplorePage: React.FC = () => {
 
           {activeTab === 'writers' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {uniqueWriters.length > 0 ? uniqueWriters.map(writer => (
+              {allWriters.length > 0 ? allWriters.map(writer => (
                 <div 
                   key={writer.id} 
                   onClick={() => handleUserClick(writer)}
