@@ -247,6 +247,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadPosts = async () => {
     try {
+      // Load main posts (not replies) with their comment counts
       const { data: postsData, error } = await supabase
         .from('posts')
         .select(`
@@ -255,66 +256,127 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           characters:character_id(id, username, name, title, avatar_url, universe, verse_tag),
           comments(count)
         `)
+        .is('parent_post_id', null) // Only get main posts, not replies
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const posts: Post[] = postsData.map(post => ({
-        id: post.id,
-        content: post.content,
-        characterId: post.character_id,
-        character: post.characters ? {
-          id: post.characters.id,
-          username: post.characters.username,
-          name: post.characters.name,
-          title: post.characters.title,
-          avatar: post.characters.avatar_url || 'https://images.pexels.com/photos/1382734/pexels-photo-1382734.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
-          headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
-          bio: '',
-          universe: post.characters.universe,
-          verseTag: post.characters.verse_tag,
-          traits: [],
+      const posts: Post[] = await Promise.all(postsData.map(async post => {
+        // Load replies for this post
+        const { data: repliesData, error: repliesError } = await supabase
+          .from('posts')
+          .select(`
+            *,
+            profiles:user_id(id, username, display_name, avatar_url),
+            characters:character_id(id, username, name, title, avatar_url, universe, verse_tag)
+          `)
+          .eq('parent_post_id', post.id)
+          .order('created_at', { ascending: true });
+
+        const replies = repliesError ? [] : repliesData.map(reply => ({
+          id: reply.id,
+          content: reply.content,
+          characterId: reply.character_id,
+          character: reply.characters ? {
+            id: reply.characters.id,
+            username: reply.characters.username,
+            name: reply.characters.name,
+            title: reply.characters.title,
+            avatar: reply.characters.avatar_url || 'https://images.pexels.com/photos/1382734/pexels-photo-1382734.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+            headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+            bio: '',
+            universe: reply.characters.universe,
+            verseTag: reply.characters.verse_tag,
+            traits: [],
+            userId: reply.user_id,
+            customColor: '#8b5cf6',
+            customFont: 'Inter',
+            followers: [],
+            following: [],
+            createdAt: new Date()
+          } : undefined,
+          userId: reply.user_id,
+          user: reply.profiles ? {
+            id: reply.profiles.id,
+            username: reply.profiles.username,
+            displayName: reply.profiles.display_name,
+            avatar: reply.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+            headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+            bio: '',
+            writersTag: '',
+            twoFactorEnabled: false,
+            characters: [],
+            followers: [],
+            following: [],
+            createdAt: new Date(),
+            privacySettings: {
+              profileVisibility: 'public',
+              messagePermissions: 'everyone',
+              tagNotifications: true,
+              directMessageNotifications: true
+            }
+          } : undefined,
+          timestamp: new Date(reply.created_at)
+        }));
+
+        return {
+          id: post.id,
+          content: post.content,
+          characterId: post.character_id,
+          character: post.characters ? {
+            id: post.characters.id,
+            username: post.characters.username,
+            name: post.characters.name,
+            title: post.characters.title,
+            avatar: post.characters.avatar_url || 'https://images.pexels.com/photos/1382734/pexels-photo-1382734.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+            headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+            bio: '',
+            universe: post.characters.universe,
+            verseTag: post.characters.verse_tag,
+            traits: [],
+            userId: post.user_id,
+            customColor: '#8b5cf6',
+            customFont: 'Inter',
+            followers: [],
+            following: [],
+            createdAt: new Date()
+          } : undefined,
           userId: post.user_id,
-          customColor: '#8b5cf6',
-          customFont: 'Inter',
-          followers: [],
-          following: [],
-          createdAt: new Date()
-        } : undefined,
-        userId: post.user_id,
-        user: post.profiles ? {
-          id: post.profiles.id,
-          username: post.profiles.username,
-          displayName: post.profiles.display_name,
-          avatar: post.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
-          headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
-          bio: '',
-          writersTag: '',
-          twoFactorEnabled: false,
-          characters: [],
-          followers: [],
-          following: [],
-          createdAt: new Date(),
-          privacySettings: {
-            profileVisibility: 'public',
-            messagePermissions: 'everyone',
-            tagNotifications: true,
-            directMessageNotifications: true
-          }
-        } : undefined,
-        timestamp: new Date(post.created_at),
-        likes: 0, // TODO: Calculate from post_interactions
-        reposts: 0, // TODO: Calculate from post_interactions
-        comments: Array.isArray(post.comments) ? post.comments.length : 0,
-        isLiked: false, // TODO: Check user interactions
-        isReposted: false, // TODO: Check user interactions
-        isPinned: false, // TODO: Add to database schema
-        isThread: post.is_thread || false,
-        threadId: post.thread_id,
-        parentPostId: post.parent_post_id,
-        visibility: post.visibility || 'public',
-        tags: post.tags || [],
-        mediaUrls: post.media_urls || []
+          user: post.profiles ? {
+            id: post.profiles.id,
+            username: post.profiles.username,
+            displayName: post.profiles.display_name,
+            avatar: post.profiles.avatar_url || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=350&h=350',
+            headerImage: 'https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=800&h=300',
+            bio: '',
+            writersTag: '',
+            twoFactorEnabled: false,
+            characters: [],
+            followers: [],
+            following: [],
+            createdAt: new Date(),
+            privacySettings: {
+              profileVisibility: 'public',
+              messagePermissions: 'everyone',
+              tagNotifications: true,
+              directMessageNotifications: true
+            }
+          } : undefined,
+          timestamp: new Date(post.created_at),
+          likes: 0, // TODO: Calculate from post_interactions
+          reposts: 0, // TODO: Calculate from post_interactions
+          comments: Array.isArray(post.comments) ? post.comments.length : 0,
+          isLiked: false, // TODO: Check user interactions
+          isReposted: false, // TODO: Check user interactions
+          isPinned: false, // TODO: Add to database schema
+          isThread: post.is_thread || false,
+          threadId: post.thread_id,
+          parentPostId: post.parent_post_id,
+          visibility: post.visibility || 'public',
+          tags: post.tags || [],
+          mediaUrls: post.media_urls || [],
+          replies: replies
+        };
       }));
 
       setPosts(posts);
@@ -1007,40 +1069,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Comment actions
+  // Comment actions - now creates replies instead of separate comments
   const addComment = async (postId: string, content: string, characterId?: string) => {
     try {
       if (!user) return;
 
-      console.log('Adding comment:', { postId, content, characterId, userId: user.id });
+      console.log('Adding reply to post:', { postId, content, characterId, userId: user.id });
 
+      // Create a reply post instead of a comment
       const { data, error } = await supabase
-        .from('comments')
+        .from('posts')
         .insert({
-          post_id: postId,
+          content,
           user_id: user.id,
           character_id: characterId || null,
-          content
+          parent_post_id: postId, // This makes it a reply
+          is_thread: false,
+          visibility: 'public',
+          tags: content.match(/#\w+/g) || [],
+          media_urls: []
         })
         .select()
         .single();
 
       if (error) {
-        console.error('Supabase error adding comment:', error);
+        console.error('Supabase error adding reply:', error);
         throw error;
       }
 
-      console.log('Comment added successfully:', data);
+      console.log('Reply added successfully:', data);
 
-      // Update post comment count locally
-      setPosts(prev => prev.map(post => 
-        post.id === postId ? { ...post, comments: post.comments + 1 } : post
-      ));
-
-      // Reload posts to get updated comment count
+      // Reload posts to get updated replies
       await loadPosts();
     } catch (error) {
-      console.error('Error adding comment:', error);
+      console.error('Error adding reply:', error);
       throw error;
     }
   };

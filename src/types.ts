@@ -42,6 +42,16 @@ export interface Character {
   createdAt: Date;
 }
 
+export interface Reply {
+  id: string;
+  content: string;
+  userId: string;
+  characterId?: string;
+  timestamp: Date;
+  user?: User;
+  character?: Character;
+}
+
 export interface Post {
   id: string;
   content: string;
@@ -63,16 +73,6 @@ export interface Post {
   tags: string[];
   mediaUrls?: string[];
   replies?: Reply[];
-}
-
-export interface Reply {
-  id: string;
-  content: string;
-  userId: string;
-  characterId?: string;
-  timestamp: Date;
-  user?: User;
-  character?: Character;
 }
 
 export interface Thread {

@@ -248,7 +248,7 @@ const PostCard: React.FC<PostCardProps> = ({
                 <div className="p-2 rounded-full group-hover:bg-blue-400/10 transition-colors">
                   <MessageCircle className="w-5 h-5" />
                 </div>
-                <span className="text-sm">{post.comments}</span>
+                <span className="text-sm">{post.replies?.length || 0}</span>
               </button>
 
               <button
@@ -299,10 +299,94 @@ const PostCard: React.FC<PostCardProps> = ({
       </div>
 
       {/* Replies Section */}
-      {showRepliesSection && (
+      {post.replies && post.replies.length > 0 && (
         <div className="border-t border-gray-700/50 bg-gray-900/30">
-          {/* Reply Form */}
-          <form onSubmit={handleSubmitReply} className="p-4 border-b border-gray-700/30">
+          <div className="p-4">
+            <button
+              onClick={() => setShowRepliesSection(!showRepliesSection)}
+              className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors text-sm"
+            >
+              {showRepliesSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <span>{showRepliesSection ? 'Hide' : 'Show'} {post.replies.length} {post.replies.length === 1 ? 'reply' : 'replies'}</span>
+            </button>
+          </div>
+
+          {showRepliesSection && (
+            <>
+              {/* Reply Form */}
+              <form onSubmit={handleSubmitReply} className="p-4 border-b border-gray-700/30">
+                <div className="flex space-x-3 mb-3">
+                  <img
+                    src={selectedCharacter === 'user' ? user?.avatar : userCharacters.find(c => c.id === selectedCharacter)?.avatar || user?.avatar}
+                    alt="Your avatar"
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                  <div className="flex-1">
+                    <select
+                      value={selectedCharacter}
+                      onChange={(e) => setSelectedCharacter(e.target.value)}
+                      className="mb-2 bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-1 text-sm focus:border-purple-500 focus:outline-none"
+                    >
+                      <option value="user">Reply as yourself</option>
+                      {userCharacters.map((character) => (
+                        <option key={character.id} value={character.id}>
+                          {character.name} - {character.title}
+                        </option>
+                      ))}
+                    </select>
+                    <textarea
+                      value={replyContent}
+                      onChange={(e) => setReplyContent(e.target.value)}
+                      placeholder="Write your reply..."
+                      className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-purple-500 focus:outline-none resize-none text-sm"
+                      rows={2}
+                      disabled={submittingReply}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={!replyContent.trim() || submittingReply}
+                    className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1 rounded-lg transition-colors text-sm"
+                  >
+                    {submittingReply ? 'Replying...' : 'Reply'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Existing Replies */}
+              <div className="divide-y divide-gray-700/30">
+                {post.replies.map((reply) => (
+                  <div key={reply.id} className="p-4 flex space-x-3">
+                    <img
+                      src={reply.character?.avatar || reply.user?.avatar}
+                      alt={reply.character?.name || reply.user?.displayName}
+                      className="w-6 h-6 rounded-full object-cover"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="font-medium text-white text-sm">
+                          {reply.character?.name || reply.user?.displayName}
+                        </span>
+                        <span className="text-gray-500 text-xs">
+                          {formatDistanceToNow(reply.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-gray-100 text-sm">{reply.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Show reply form if no replies exist but user wants to reply */}
+      {(!post.replies || post.replies.length === 0) && showRepliesSection && (
+        <div className="border-t border-gray-700/50 bg-gray-900/30">
+          <form onSubmit={handleSubmitReply} className="p-4">
             <div className="flex space-x-3 mb-3">
               <img
                 src={selectedCharacter === 'user' ? user?.avatar : userCharacters.find(c => c.id === selectedCharacter)?.avatar || user?.avatar}
@@ -332,7 +416,14 @@ const PostCard: React.FC<PostCardProps> = ({
                 />
               </div>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => setShowRepliesSection(false)}
+                className="text-gray-400 hover:text-white transition-colors text-sm"
+              >
+                Cancel
+              </button>
               <button
                 type="submit"
                 disabled={!replyContent.trim() || submittingReply}
@@ -342,43 +433,6 @@ const PostCard: React.FC<PostCardProps> = ({
               </button>
             </div>
           </form>
-
-          {/* Existing Replies */}
-          {post.replies && post.replies.length > 0 && (
-            <div className="divide-y divide-gray-700/30">
-              {post.replies.map((reply) => (
-                <div key={reply.id} className="p-4 flex space-x-3">
-                  <img
-                    src={reply.character?.avatar || reply.user?.avatar}
-                    alt={reply.character?.name || reply.user?.displayName}
-                    className="w-6 h-6 rounded-full object-cover"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="font-medium text-white text-sm">
-                        {reply.character?.name || reply.user?.displayName}
-                      </span>
-                      <span className="text-gray-500 text-xs">
-                        {formatDistanceToNow(reply.timestamp)}
-                      </span>
-                    </div>
-                    <p className="text-gray-100 text-sm">{reply.content}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Toggle Button */}
-          <div className="p-2 text-center">
-            <button
-              onClick={() => setShowRepliesSection(false)}
-              className="text-gray-400 hover:text-white transition-colors text-sm flex items-center space-x-1 mx-auto"
-            >
-              <ChevronUp className="w-4 h-4" />
-              <span>Hide replies</span>
-            </button>
-          </div>
         </div>
       )}
     </article>
