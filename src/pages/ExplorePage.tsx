@@ -24,83 +24,111 @@ const ExplorePage: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedCharacter, setSelectedCharacter] = useState<any>(null);
   const [followingStates, setFollowingStates] = useState<Record<string, boolean>>({});
+  const [trendingTags, setTrendingTags] = useState<[string, number][]>([]);
+  const [verseTags, setVerseTags] = useState<string[]>([]);
+  const [allWriters, setAllWriters] = useState<any[]>([]);
 
-  // Load recommendations on component mount
+  // Real-time refresh every 1 second
   useEffect(() => {
-    const recs = getRecommendations();
-    setRecommendations(recs);
-  }, [getRecommendations]);
+    const refreshData = () => {
+      // Update recommendations
+      const recs = getRecommendations();
+      setRecommendations(recs);
 
-  // Initialize following states
-  useEffect(() => {
-    if (user) {
-      const states: Record<string, boolean> = {};
-      allUsers.forEach(writer => {
-        states[writer.id] = user.following.includes(writer.id);
-      });
-      setFollowingStates(states);
-    }
-  }, [user, allUsers]);
+      // Update trending tags from posts
+      const tagCounts = posts
+        .flatMap(post => post.tags)
+        .reduce((acc, tag) => {
+          acc[tag] = (acc[tag] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+      const sortedTags = Object.entries(tagCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 10);
+      
+      setTrendingTags(sortedTags);
+
+      // Update verse tags from characters
+      const uniqueVerseTags = characters
+        .map(char => char.verseTag)
+        .filter((tag, index, arr) => arr.indexOf(tag) === index)
+        .slice(0, 8);
+      
+      setVerseTags(uniqueVerseTags);
+
+      // Update all writers
+      const writers = allUsers.filter(writer => writer.id !== user?.id);
+      setAllWriters(writers);
+
+      // Update following states
+      if (user) {
+        const states: Record<string, boolean> = {};
+        allUsers.forEach(writer => {
+          states[writer.id] = user.following.includes(writer.id);
+        });
+        setFollowingStates(states);
+      }
+
+      // Update search results if there's a query
+      if (searchQuery.trim()) {
+        updateSearchResults();
+      }
+    };
+
+    // Initial load
+    refreshData();
+
+    // Set up interval for real-time updates every 1 second
+    const interval = setInterval(refreshData, 1000);
+
+    return () => clearInterval(interval);
+  }, [posts, characters, allUsers, user, searchQuery, getRecommendations]);
+
+  // Update search results function
+  const updateSearchResults = () => {
+    if (!searchQuery.trim()) return;
+
+    const lowerQuery = searchQuery.toLowerCase();
+    
+    const matchingPosts = posts.filter(post =>
+      post.content.toLowerCase().includes(lowerQuery) ||
+      post.character?.name.toLowerCase().includes(lowerQuery) ||
+      post.user?.displayName.toLowerCase().includes(lowerQuery) ||
+      post.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
+    );
+
+    const matchingCharacters = characters.filter(char =>
+      char.name.toLowerCase().includes(lowerQuery) ||
+      char.username.toLowerCase().includes(lowerQuery) ||
+      char.verseTag.toLowerCase().includes(lowerQuery) ||
+      char.universe.toLowerCase().includes(lowerQuery) ||
+      char.bio.toLowerCase().includes(lowerQuery) ||
+      char.traits.some(trait => trait.toLowerCase().includes(lowerQuery))
+    );
+
+    // Show ALL users that match search, including current user
+    const matchingUsers = allUsers.filter(searchUser =>
+      searchUser.displayName.toLowerCase().includes(lowerQuery) ||
+      searchUser.username.toLowerCase().includes(lowerQuery) ||
+      searchUser.writersTag.toLowerCase().includes(lowerQuery) ||
+      searchUser.bio.toLowerCase().includes(lowerQuery)
+    );
+
+    setSearchResults({
+      posts: matchingPosts,
+      characters: matchingCharacters,
+      users: matchingUsers
+    });
+  };
 
   // Handle search - show ALL matching users, not filtered
   useEffect(() => {
     if (searchQuery.trim()) {
-      // Custom search that includes ALL users
-      const lowerQuery = searchQuery.toLowerCase();
-      
-      const matchingPosts = posts.filter(post =>
-        post.content.toLowerCase().includes(lowerQuery) ||
-        post.character?.name.toLowerCase().includes(lowerQuery) ||
-        post.user?.displayName.toLowerCase().includes(lowerQuery) ||
-        post.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
-      );
-
-      const matchingCharacters = characters.filter(char =>
-        char.name.toLowerCase().includes(lowerQuery) ||
-        char.username.toLowerCase().includes(lowerQuery) ||
-        char.verseTag.toLowerCase().includes(lowerQuery) ||
-        char.universe.toLowerCase().includes(lowerQuery) ||
-        char.bio.toLowerCase().includes(lowerQuery) ||
-        char.traits.some(trait => trait.toLowerCase().includes(lowerQuery))
-      );
-
-      // Show ALL users that match search, including current user
-      const matchingUsers = allUsers.filter(searchUser =>
-        searchUser.displayName.toLowerCase().includes(lowerQuery) ||
-        searchUser.username.toLowerCase().includes(lowerQuery) ||
-        searchUser.writersTag.toLowerCase().includes(lowerQuery) ||
-        searchUser.bio.toLowerCase().includes(lowerQuery)
-      );
-
-      setSearchResults({
-        posts: matchingPosts,
-        characters: matchingCharacters,
-        users: matchingUsers
-      });
+      updateSearchResults();
       setActiveTab('search');
     }
-  }, [searchQuery, posts, characters, allUsers]);
-
-  // Extract trending tags from posts
-  const trendingTags = posts
-    .flatMap(post => post.tags)
-    .reduce((acc, tag) => {
-      acc[tag] = (acc[tag] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-  const sortedTags = Object.entries(trendingTags)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10);
-
-  // Get verse tags from characters
-  const verseTags = characters
-    .map(char => char.verseTag)
-    .filter((tag, index, arr) => arr.indexOf(tag) === index)
-    .slice(0, 8);
-
-  // Show ALL writers, not filtered by following status
-  const allWriters = allUsers.filter(writer => writer.id !== user?.id);
+  }, [searchQuery]);
 
   const handleLike = (postId: string) => {
     likePost(postId);
@@ -201,7 +229,7 @@ const ExplorePage: React.FC = () => {
                   <span>Trending Now</span>
                 </h3>
                 <div className="space-y-3">
-                  {sortedTags.length > 0 ? sortedTags.map(([tag, count]) => (
+                  {trendingTags.length > 0 ? trendingTags.map(([tag, count]) => (
                     <div key={tag} className="flex items-center justify-between p-3 hover:bg-gray-700/30 rounded-lg cursor-pointer transition-colors">
                       <div>
                         <p className="text-purple-400 font-medium">#{tag}</p>
@@ -232,7 +260,7 @@ const ExplorePage: React.FC = () => {
 
           {activeTab === 'tags' && (
             <div className="space-y-4">
-              {sortedTags.length > 0 ? sortedTags.map(([tag, count]) => (
+              {trendingTags.length > 0 ? trendingTags.map(([tag, count]) => (
                 <div key={tag} className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50 hover:bg-gray-700/30 cursor-pointer transition-colors">
                   <div className="flex items-center justify-between">
                     <div>
